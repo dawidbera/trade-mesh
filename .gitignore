@@ -1,0 +1,78 @@
+# Maven
+target/
+*.jar
+*.war
+*.zip
+.mvn/
+mvnw
+mvnw.cmd
+
+# AWS SAM
+.aws-sam/
+packaged.yaml
+
+# LocalStack
+localstack_data/
+.localstack/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+.terraform.lock.hcl
+
+# Node.js / Angular
+**/node_modules/
+**/dist/
+**/tmp/
+**/.angular/
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Spring Boot / JVM
+bin/
+out/
+
+# PKCS #12 files (sensitive)
+*.p12
+
+# Logs
+logs/
+*.log
+*.log.gz
+
+# Backup & Temp
+*.swp
+*~
+*.bak
+
+# GitHub Repo Defaults
+# Compiled class file
+*.class
+# BlueJ files
+*.ctxt
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+# virtual machine crash logs
+hs_err_pid*
+replay_pid*
+
+# Certificates and private keys (security)
+*.pem
+*.key
+*.crt
+
+# Localstack cache
+localstack/cache/*
