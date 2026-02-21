@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package analytics;
+
+option java_multiple_files = true;
+option java_package = "com.trademesh.analytics.grpc";
+option java_outer_classname = "AnalyticsProto";
+
+// Service for technical indicators and market analysis
+service AnalyticsService {
+  // Get technical indicator for a specific asset (e.g., RSI, Moving Average)
+  rpc GetIndicator (IndicatorRequest) returns (IndicatorResponse) {}
+
+  // Stream technical indicators as they change (Server-side streaming)
+  rpc StreamIndicators (IndicatorRequest) returns (stream IndicatorResponse) {}
+}
+
+message IndicatorRequest {
+  string assetId = 1;
+  string indicatorType = 2; // e.g., "RSI", "SMA", "EMA"
+  int32 period = 3;         // Lookback period (e.g., 14 for RSI)
+}
+
+message IndicatorResponse {
+  string assetId = 1;
+  string indicatorType = 2;
+  double value = 3;
+  int64 timestamp = 4;
+  map<string, string> metadata = 5; // Additional data like status or source
+}

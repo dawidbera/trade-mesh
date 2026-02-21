@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package history;
+
+option java_multiple_files = true;
+option java_package = "com.trademesh.history.grpc";
+option java_outer_classname = "HistoryProto";
+
+// Service for recording and retrieving historical data (TimescaleDB)
+service HistoryService {
+  // Store a single transaction record (Fire and Forget or Ack)
+  rpc RecordTransaction (TransactionRequest) returns (TransactionResponse) {}
+
+  // Get historical price data for charting (e.g., Candlestick charts)
+  rpc GetHistoricalData (HistoryQueryRequest) returns (HistoryQueryResponse) {}
+}
+
+message TransactionRequest {
+  string assetId = 1;
+  double price = 2;
+  double volume = 3;
+  int64 timestamp = 4;
+  string side = 5; // e.g., "BUY" or "SELL"
+}
+
+message TransactionResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message HistoryQueryRequest {
+  string assetId = 1;
+  int64 startTimestamp = 2;
+  int64 endTimestamp = 3;
+  string interval = 4; // e.g., "1m", "5m", "1h", "1d"
+}
+
+message HistoryQueryResponse {
+  string assetId = 1;
+  repeated OHLCData series = 2;
+}
+
+message OHLCData {
+  int64 timestamp = 1; // Open time
+  double open = 2;
+  double high = 3;
+  double low = 4;
+  double close = 5;
+  double volume = 6;
+}

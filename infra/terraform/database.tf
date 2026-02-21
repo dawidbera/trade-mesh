@@ -29,6 +29,11 @@ resource "helm_release" "timescaledb" {
   }
 
   set {
+    name  = "auth.postgresPassword"
+    value = "trademesh-secret"
+  }
+
+  set {
     name  = "primary.persistence.size"
     value = "10Gi" # Fits well within Sandbox 25Gi limit
   }
