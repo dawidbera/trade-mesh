@@ -1,5 +1,6 @@
 package com.trademesh.analytics.service;
 
+import com.trademesh.analytics.logic.SmaCalculator;
 import com.trademesh.analytics.grpc.AnalyticsService;
 import com.trademesh.analytics.grpc.IndicatorRequest;
 import com.trademesh.analytics.grpc.IndicatorResponse;
@@ -26,6 +27,9 @@ public class AnalyticsServiceBean implements AnalyticsService {
 
     private static final Logger LOG = Logger.getLogger(AnalyticsServiceBean.class);
     private final ListCommands<String, Double> priceLists;
+
+    @Inject
+    SmaCalculator smaCalculator;
 
     /**
      * Initializes the service with a Redis data source.
@@ -63,8 +67,8 @@ public class AnalyticsServiceBean implements AnalyticsService {
         List<Double> prices = priceLists.lrange("history:" + assetId, 0, period - 1);
         double value = 0.0;
         
-        if (type.equalsIgnoreCase("SMA") && !prices.isEmpty()) {
-            value = prices.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+        if (type.equalsIgnoreCase("SMA")) {
+            value = smaCalculator.calculate(prices);
         } else {
             // Placeholder for other indicators
             value = Math.random() * 100.0;

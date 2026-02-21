@@ -20,5 +20,5 @@ public class HelloGrpcService implements HelloGrpc {
         return Uni.createFrom().item("Hello " + request.getName() + "!")
                 .map(msg -> HelloReply.newBuilder().setMessage(msg).build());
     }
-
+    
 }

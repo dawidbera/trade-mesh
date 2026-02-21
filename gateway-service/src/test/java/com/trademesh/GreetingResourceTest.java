@@ -11,6 +11,9 @@ import static org.hamcrest.CoreMatchers.is;
  */
 @QuarkusTest
 class GreetingResourceTest {
+    /**
+     * Verifies that the /hello endpoint returns the expected greeting message.
+     */
     @Test
     void testHelloEndpoint() {
         given()

@@ -13,6 +13,7 @@ import io.smallrye.mutiny.Multi;
 import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.eclipse.microprofile.reactive.messaging.Emitter;
 import org.jboss.logging.Logger;
+import com.trademesh.market.logic.PriceEngine;
 import com.trademesh.market.model.MarketPrice;
 
 /**
@@ -25,8 +26,10 @@ public class MarketSimulator {
 
     private static final Logger LOG = Logger.getLogger(MarketSimulator.class);
     private final ValueCommands<String, Double> priceCommands;
-    private final Random random = new Random();
     private final List<String> assets = List.of("BTC", "ETH", "AAPL", "GOOG", "TSLA");
+
+    @Inject
+    PriceEngine priceEngine;
 
     @Inject
     @Channel("market-prices")
@@ -50,7 +53,7 @@ public class MarketSimulator {
         LOG.info("MarketSimulator started, initializing asset prices...");
         assets.forEach(assetId -> {
             if (priceCommands.get("price:" + assetId) == null) {
-                priceCommands.set("price:" + assetId, 100.0 + random.nextDouble() * 50.0);
+                priceCommands.set("price:" + assetId, priceEngine.initialPrice());
             }
         });
 
@@ -65,8 +68,7 @@ public class MarketSimulator {
         assets.forEach(assetId -> {
             Double currentPrice = priceCommands.get("price:" + assetId);
             if (currentPrice != null) {
-                double change = (random.nextDouble() - 0.5) * 2.0; // +/- 1.0
-                double newPrice = currentPrice + change;
+                double newPrice = priceEngine.nextPrice(currentPrice);
                 priceCommands.set("price:" + assetId, newPrice);
                 
                 // Publish to RabbitMQ
