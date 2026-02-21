@@ -3,9 +3,6 @@ target/
 *.jar
 *.war
 *.zip
-.mvn/
-mvnw
-mvnw.cmd
 
 # AWS SAM
 .aws-sam/

@@ -81,8 +81,9 @@ The system implements a **Separated Logic Layer** to ensure high reliability and
 
 ## ✅ Quality Assurance
 The platform follows a rigorous testing strategy:
-- **Unit Tests:** Validate mathematical models and factory logic in isolation (JUnit 5, AssertJ).
-- **Integration Tests:** Every service includes tests that provision ephemeral infrastructure (Redis, Postgres, RabbitMQ) using **Quarkus DevServices**.
+- **CI (GitHub):** Every push to `master` triggers a **GitHub Actions** pipeline to run full Unit and Integration test suites. This ensures code quality before deployment.
+- **Build & Deploy (OpenShift):** After successful CI, images are built **internally** on the Red Hat Sandbox using **BuildConfigs (S2I or Binary Builds)**. Images are stored in the OpenShift Internal Registry.
+- **GitOps (ArgoCD):** Automates the synchronization of the environment state with the latest built images.
 - **Contract Verification:** Ensures gRPC compatibility across the microservices mesh.
 
 ## 🧩 Microservices (Quarkus 3.15+)
