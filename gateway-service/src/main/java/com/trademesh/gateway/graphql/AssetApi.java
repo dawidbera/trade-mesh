@@ -6,6 +6,7 @@ import com.trademesh.market.grpc.PriceRequest;
 import com.trademesh.market.grpc.PriceService;
 import com.trademesh.market.model.MarketPrice;
 import io.quarkus.grpc.GrpcClient;
+import io.quarkus.security.Authenticated;
 import io.smallrye.graphql.api.Subscription;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
@@ -25,9 +26,11 @@ import java.util.List;
  * Aggregates data from market-data-service, analytics-service, and history-service using gRPC.
  * Supports real-time price updates via GraphQL Subscriptions.
  * Implements Fault Tolerance via Circuit Breakers and Fallbacks.
+ * Secured via OIDC (Keycloak).
  */
 @GraphQLApi
 @ApplicationScoped
+@Authenticated
 public class AssetApi {
 
     @GrpcClient("market")

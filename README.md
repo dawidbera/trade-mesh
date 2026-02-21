@@ -18,7 +18,7 @@ graph TD
     end
 
     subgraph "Security & Resilience"
-        Security[Auth/Vault]
+        Security[Keycloak/Vault]
         Resilience[Circuit Breakers]
     end
 
@@ -42,14 +42,15 @@ graph TD
     end
 
     %% Flow
-    Client -- "1. Query / WS" --> Gateway
-    Gateway -- "2. Check" --> Security
+    Client -- "1. Query (JWT)" --> Gateway
+    Gateway -- "2. Validate JWT" --> Security
+    Gateway -- "2. Fetch Secrets" --> Security
     Gateway -. "Resilience" .-> Resilience
     
     %% Sync
-    Gateway -- "3. gRPC" --> Market
-    Gateway -- "3. gRPC" --> Analytics
-    Gateway -- "3. gRPC" --> History
+    Gateway -- "3. gRPC Aggregation" --> Market
+    Gateway -- "3. gRPC Aggregation" --> Analytics
+    Gateway -- "3. gRPC Aggregation" --> History
 
     %% Async
     Market -- "4. Pub" --> RabbitMQ
