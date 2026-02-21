@@ -3,37 +3,29 @@ package com.trademesh.analytics.service;
 import com.trademesh.analytics.grpc.AnalyticsService;
 import com.trademesh.analytics.grpc.IndicatorRequest;
 import com.trademesh.analytics.grpc.IndicatorResponse;
-import com.trademesh.market.grpc.PriceRequest;
-import com.trademesh.market.grpc.PriceService;
-import io.quarkus.grpc.GrpcClient;
 import io.quarkus.grpc.GrpcService;
 import io.quarkus.redis.datasource.RedisDataSource;
 import io.quarkus.redis.datasource.list.ListCommands;
-import io.quarkus.runtime.StartupEvent;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
-import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.jboss.logging.Logger;
+import com.trademesh.market.model.MarketPrice;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
-import org.jboss.logging.Logger;
 
 /**
  * Implementation of the gRPC AnalyticsService.
  * Calculates technical indicators for assets based on price history stored in Redis.
- * Subscribes to live price streams from market-data-service.
+ * Consumes live price updates from RabbitMQ via the 'market-prices' channel.
  */
 @GrpcService
 public class AnalyticsServiceBean implements AnalyticsService {
 
     private static final Logger LOG = Logger.getLogger(AnalyticsServiceBean.class);
     private final ListCommands<String, Double> priceLists;
-    private final List<String> assets = List.of("BTC", "ETH", "AAPL", "GOOG", "TSLA");
-
-    @GrpcClient("market")
-    PriceService marketService;
 
     /**
      * Initializes the service with a Redis data source.
@@ -45,29 +37,15 @@ public class AnalyticsServiceBean implements AnalyticsService {
     }
 
     /**
-     * Executed when the application starts.
-     * Initiates subscriptions to live price streams for all supported assets.
-     * @param ev Startup event.
+     * Consumes market price updates from RabbitMQ.
+     * Updates internal Redis price history for the specific asset.
+     * @param price The price event received from the message bus.
      */
-    void onStart(@Observes StartupEvent ev) {
-        LOG.info("AnalyticsService started, subscribing to market price streams...");
-        assets.forEach(this::subscribeToPriceStream);
-    }
-
-    /**
-     * Subscribes to the price stream for a specific asset and stores updates in Redis.
-     * Keeps only the last 100 prices for each asset.
-     * @param assetId The ID of the asset to subscribe to.
-     */
-    private void subscribeToPriceStream(String assetId) {
-        marketService.streamPrices(PriceRequest.newBuilder().setAssetId(assetId).build())
-            .subscribe().with(
-                price -> {
-                    priceLists.lpush("history:" + assetId, price.getValue());
-                    priceLists.ltrim("history:" + assetId, 0, 99); // Keep last 100 prices
-                },
-                failure -> LOG.errorf("Price stream failed for %s: %s", assetId, failure.getMessage())
-            );
+    @Incoming("market-prices")
+    public void consumePrice(MarketPrice price) {
+        LOG.debugf("Received price for %s: %.2f", price.assetId, price.value);
+        priceLists.lpush("history:" + price.assetId, price.value);
+        priceLists.ltrim("history:" + price.assetId, 0, 99); // Keep last 100 prices
     }
 
     /**

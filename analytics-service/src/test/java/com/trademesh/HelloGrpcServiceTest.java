@@ -9,6 +9,9 @@ import io.quarkus.test.junit.QuarkusTest;
 
 import org.junit.jupiter.api.Test;
 
+/**
+ * Tests the HelloGrpcService boilerplate in analytics-service.
+ */
 @QuarkusTest
 class HelloGrpcServiceTest {
     @GrpcClient

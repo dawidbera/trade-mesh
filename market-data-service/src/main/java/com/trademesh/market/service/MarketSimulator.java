@@ -10,11 +10,15 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Random;
 import io.smallrye.mutiny.Multi;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
 import org.jboss.logging.Logger;
+import com.trademesh.market.model.MarketPrice;
 
 /**
  * Simulates market price movements for a set of assets.
  * Periodically updates asset prices stored in Redis to mimic a live market.
+ * Publishes price updates to RabbitMQ via the 'market-prices' channel.
  */
 @ApplicationScoped
 public class MarketSimulator {
@@ -23,6 +27,10 @@ public class MarketSimulator {
     private final ValueCommands<String, Double> priceCommands;
     private final Random random = new Random();
     private final List<String> assets = List.of("BTC", "ETH", "AAPL", "GOOG", "TSLA");
+
+    @Inject
+    @Channel("market-prices")
+    Emitter<MarketPrice> priceEmitter;
 
     /**
      * Initializes the simulator with a Redis data source.
@@ -51,7 +59,7 @@ public class MarketSimulator {
     }
 
     /**
-     * Updates prices for all tracked assets by adding a random change.
+     * Updates prices for all tracked assets, stores in Redis and publishes to RabbitMQ.
      */
     private void updatePrices() {
         assets.forEach(assetId -> {
@@ -60,7 +68,11 @@ public class MarketSimulator {
                 double change = (random.nextDouble() - 0.5) * 2.0; // +/- 1.0
                 double newPrice = currentPrice + change;
                 priceCommands.set("price:" + assetId, newPrice);
-                LOG.debugf("Asset %s price updated to %.2f", assetId, newPrice);
+                
+                // Publish to RabbitMQ
+                priceEmitter.send(new MarketPrice(assetId, newPrice));
+                
+                LOG.debugf("Asset %s price updated to %.2f and published", assetId, newPrice);
             }
         });
     }

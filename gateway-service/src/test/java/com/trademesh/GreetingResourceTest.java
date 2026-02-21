@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Test;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.is;
 
+/**
+ * Tests the GreetingResource REST endpoint.
+ */
 @QuarkusTest
 class GreetingResourceTest {
     @Test

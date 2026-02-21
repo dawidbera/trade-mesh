@@ -1,61 +1,39 @@
 package com.trademesh.history.service;
 
 import com.trademesh.history.grpc.*;
-import com.trademesh.history.model.Transaction;
-import com.trademesh.market.grpc.PriceRequest;
-import com.trademesh.market.grpc.PriceService;
-import io.quarkus.grpc.GrpcClient;
 import io.quarkus.grpc.GrpcService;
-import io.quarkus.runtime.StartupEvent;
 import io.smallrye.mutiny.Uni;
-import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.jboss.logging.Logger;
+import com.trademesh.market.model.MarketPrice;
 import java.time.Instant;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Random;
-import org.jboss.logging.Logger;
 
 /**
  * Implementation of the gRPC HistoryService.
  * Archives transaction and price history in a persistent database.
- * Subscribes to live price streams from market-data-service to record price changes.
+ * Consumes live price updates from RabbitMQ via the 'market-prices' channel to record history.
  */
 @GrpcService
 public class HistoryServiceBean implements HistoryService {
 
     private static final Logger LOG = Logger.getLogger(HistoryServiceBean.class);
-    private final List<String> assets = List.of("BTC", "ETH", "AAPL", "GOOG", "TSLA");
     private final Random random = new Random();
 
     @Inject
     TransactionRecorder recorder;
 
-    @GrpcClient("market")
-    PriceService marketService;
-
     /**
-     * Executed when the application starts.
-     * Initiates price archiving by subscribing to live price streams for all assets.
-     * @param ev Startup event.
+     * Consumes market price updates from RabbitMQ and archives them as transactions.
+     * @param price The price event received from the message bus.
      */
-    void onStart(@Observes StartupEvent ev) {
-        LOG.info("HistoryService started, archiving price changes as transactions...");
-        assets.forEach(this::archivePriceChanges);
-    }
-
-    /**
-     * Subscribes to the price stream for a specific asset and records each update as a transaction.
-     * @param assetId The ID of the asset to archive.
-     */
-    private void archivePriceChanges(String assetId) {
-        marketService.streamPrices(PriceRequest.newBuilder().setAssetId(assetId).build())
-            .subscribe().with(
-                price -> recorder.recordPriceAsTransaction(price.getAssetId(), price.getValue()),
-                failure -> LOG.errorf("Price archiving failed for %s: %s", assetId, failure.getMessage())
-            );
+    @Incoming("market-prices")
+    public void archivePrice(MarketPrice price) {
+        LOG.debugf("Archiving price for %s: %.2f", price.assetId, price.value);
+        recorder.recordPriceAsTransaction(price.assetId, price.value);
     }
 
     /**
