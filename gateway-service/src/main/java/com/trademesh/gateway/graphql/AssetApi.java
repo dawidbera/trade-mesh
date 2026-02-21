@@ -4,16 +4,23 @@ import com.trademesh.gateway.graphql.model.Asset;
 import com.trademesh.gateway.graphql.model.Price;
 import com.trademesh.market.grpc.PriceRequest;
 import com.trademesh.market.grpc.PriceService;
+import com.trademesh.market.model.MarketPrice;
 import io.quarkus.grpc.GrpcClient;
+import io.smallrye.graphql.api.Subscription;
+import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.*;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+
 import java.time.Instant;
 import java.util.List;
 
 /**
  * GraphQL API for retrieving asset information.
  * Aggregates data from market-data-service, analytics-service, and history-service using gRPC.
+ * Supports real-time price updates via GraphQL Subscriptions.
  */
 @GraphQLApi
 @ApplicationScoped
@@ -27,6 +34,10 @@ public class AssetApi {
 
     @GrpcClient("history")
     com.trademesh.history.grpc.HistoryService historyService;
+
+    @Inject
+    @Channel("market-prices")
+    Multi<MarketPrice> priceStream;
 
     /**
      * GraphQL Query to get a specific asset by its ID.
@@ -62,6 +73,20 @@ public class AssetApi {
     public Uni<Price> getCurrentPrice(@Source Asset asset) {
         return marketService.getPrice(PriceRequest.newBuilder().setAssetId(asset.id).build())
             .onItem().transform(resp -> new Price(resp.getValue(), Instant.ofEpochMilli(resp.getTimestamp()), resp.getCurrency()));
+    }
+
+    /**
+     * GraphQL Subscription for real-time price updates.
+     * Consumes price events from RabbitMQ and filters them by assetId.
+     * @param assetId The asset ID to subscribe to.
+     * @return A Multi emitting price updates.
+     */
+    @Subscription
+    @Description("Subscribe to real-time price updates for a specific asset")
+    public Multi<Price> priceUpdates(@Name("assetId") String assetId) {
+        return priceStream
+            .filter(mp -> mp.assetId.equals(assetId))
+            .map(mp -> new Price(mp.value, Instant.ofEpochMilli(mp.timestamp), mp.currency));
     }
 
     /**
