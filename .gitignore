@@ -76,3 +76,40 @@ replay_pid*
 
 # Localstack cache
 localstack/cache/*
+
+# Secrets & Local Config
+.env
+.env.local
+.env.*.local
+*.env
+**/.env
+
+# Quarkus specific
+.quarkus/
+**/build/
+
+# Maven - additional artifacts
+release.properties
+pom.xml.releaseBackup
+pom.xml.tag
+pom.xml.next
+pom.xml.backup
+dependency-reduced-pom.xml
+flattened-pom.xml
+
+# Terraform - additional temporary files
+*.tfvars
+*.tfvars.json
+
+# IDE 
+.factorypath
+.project
+.classpath
+.settings/
+*.ipr
+*.iws
+
+# macOS
+.AppleDouble
+.LSOverride
+Icon

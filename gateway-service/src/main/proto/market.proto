@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package market;
+
+option java_multiple_files = true;
+option java_package = "com.trademesh.market.grpc";
+option java_outer_classname = "MarketProto";
+
+// Service for real-time market data simulation
+service PriceService {
+  // Get the current price for a specific asset
+  rpc GetPrice (PriceRequest) returns (PriceResponse) {}
+
+  // Subscribe to real-time price updates for an asset (Server-side streaming)
+  rpc StreamPrices (PriceRequest) returns (stream PriceResponse) {}
+}
+
+message PriceRequest {
+  string assetId = 1;
+}
+
+message PriceResponse {
+  string assetId = 1;
+  double value = 2;
+  int64 timestamp = 3; // Unix timestamp in milliseconds
+  string currency = 4;
+}
