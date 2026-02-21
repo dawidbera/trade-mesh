@@ -1,53 +1,109 @@
-# TradeMesh Technical Documentation
+# TradeMesh Technical Core
 
-This directory contains the core implementation of the **TradeMesh** platform, including infrastructure, gRPC contracts, and microservices.
-
-## 🏗️ Core Infrastructure (Terraform)
-Located in `infra/terraform/`, these files manage the complete foundation for the Red Hat Sandbox environment.
-
-- `database.tf`: Provisions **TimescaleDB** (PostgreSQL) and **Redis**.
-- `messaging.tf`: Provisions **RabbitMQ** for service-to-service communication.
-- `security.tf`: Provisions **HashiCorp Vault** for secrets management.
-- `iam.tf`: Provisions **Keycloak** (IAM) for authentication.
-- `gitops.tf`: Provisions **ArgoCD** (OpenShift GitOps) for CD.
-- `main.tf`: Configures **NetworkPolicies** for gRPC traffic isolation.
-
-### Deployment Guide
-1. Configure `terraform.tfvars` with your sandbox namespace (e.g., `dawidbera-dev`).
-2. `terraform init`
-3. `terraform apply`
-
----
+This directory contains the implementation of the TradeMesh platform, structured into infrastructure, contracts, and Java 21 microservices.
 
 ## 📡 gRPC Mesh Contracts
 Located in `proto/`, these files define the "Source of Truth" for all communications.
-
-- **`market.proto`**: Real-time market prices (Streaming).
+- **`market.proto`**: Real-time market prices.
 - **`analytics.proto`**: Technical indicators (RSI, MA).
 - **`history.proto`**: Historical data and OHLC Candlestick series.
 
-### Code Generation (Java/Quarkus)
-To generate the gRPC client and server code, use the `quarkus-grpc` extension. Quarkus will automatically detect the `.proto` files in the `src/main/proto` or a linked directory.
+## 🏗️ Architecture & Request Flow
+The system follows the **Backend-for-Frontend (BFF)** pattern with a high-speed gRPC mesh and asynchronous event bus:
 
----
+```mermaid
+graph TD
+    subgraph "External World"
+        Client[Angular 21 Client]
+    end
 
-## 🔐 Security Configuration
-### HashiCorp Vault
-After deployment, initialize and unseal Vault manually:
-```bash
-kubectl exec -it vault-0 -- vault operator init
-kubectl exec -it vault-0 -- vault operator unseal <KEY>
+    subgraph "Security & Resilience"
+        Security[Auth/Vault]
+        Resilience[Circuit Breakers]
+    end
+
+    subgraph "TradeMesh Gateway (BFF)"
+        Gateway[GraphQL Gateway]
+    end
+
+    subgraph "gRPC Mesh (Sync)"
+        Market[Market Data Engine]
+        Analytics[Analytics Service]
+        History[History Service]
+    end
+
+    subgraph "Async Data Bus"
+        RabbitMQ{RabbitMQ / market.prices}
+    end
+
+    subgraph "Persistence"
+        Redis[(Redis)]
+        Timescale[(TimescaleDB)]
+    end
+
+    %% Flow
+    Client -- "1. Query / WS" --> Gateway
+    Gateway -- "2. Check" --> Security
+    Gateway -. "Resilience" .-> Resilience
+    
+    %% Sync
+    Gateway -- "3. gRPC" --> Market
+    Gateway -- "3. gRPC" --> Analytics
+    Gateway -- "3. gRPC" --> History
+
+    %% Async
+    Market -- "4. Pub" --> RabbitMQ
+    RabbitMQ -- "5. Sub" --> Analytics
+    RabbitMQ -- "5. Sub" --> History
+    RabbitMQ -- "5. WS Stream" --> Gateway
+    
+    %% Storage
+    Market --> Redis
+    Analytics --> Redis
+    History --> Timescale
 ```
 
-### Keycloak
-Default credentials (configured in `iam.tf`):
-- **Admin User:** `admin`
-- **Admin Password:** `admin-secret`
+## 🧩 Microservices (Quarkus 3.15+)
+Each service is built using Java 21 and the Mutiny reactive programming model.
+
+1. **`gateway-service`**:
+   - The BFF (Backend for Frontend).
+   - Aggregates gRPC data using Virtual Threads.
+   - Provides GraphQL Query & Subscription (WebSockets) API.
+   - Resilience: Circuit Breakers & Fallbacks.
+
+2. **`market-data-service`**:
+   - Real-time market simulator.
+   - Publishes price ticks to RabbitMQ (`market.prices` exchange).
+   - Manages live state in Redis.
+
+3. **`analytics-service`**:
+   - Computes technical indicators (e.g., SMA).
+   - Consumes live ticks from RabbitMQ.
+   - Stores results in Redis.
+
+4. **`history-service`**:
+   - Time-series archival service.
+   - Consumes live ticks from RabbitMQ.
+   - Persists data into TimescaleDB (PostgreSQL).
+
+## 🏗️ Core Infrastructure (Terraform)
+Located in `infra/terraform/`, these files manage the foundation for the Red Hat OpenShift environment.
+- `database.tf`: Provisions TimescaleDB and Redis.
+- `messaging.tf`: Provisions RabbitMQ Cluster.
+- `security.tf`: Provisions HashiCorp Vault.
+- `iam.tf`: Provisions Keycloak.
+- `main.tf`: Configures NetworkPolicies.
 
 ---
 
-## 📂 Project Organization
-- `infra/terraform/`: All IaC files.
-- `proto/`: Shared gRPC definitions.
-- `services/`: (Upcoming) Java 21 Quarkus microservices.
-- `gateway/`: (Upcoming) GraphQL Gateway implementation.
+## 🛠️ Build & Compilation
+To compile all services and generate gRPC/GraphQL sources:
+```bash
+for d in *-service; do (cd "$d" && ./mvnw compile -DskipTests); done
+```
+
+To package all services:
+```bash
+for d in *-service; do (cd "$d" && ./mvnw package -DskipTests); done
+```
