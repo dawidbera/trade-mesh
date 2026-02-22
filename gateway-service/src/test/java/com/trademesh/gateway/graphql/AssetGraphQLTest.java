@@ -4,6 +4,7 @@ import com.trademesh.market.grpc.PriceResponse;
 import com.trademesh.market.grpc.PriceService;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.security.TestSecurity;
 import io.smallrye.mutiny.Uni;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ public class AssetGraphQLTest {
      * Verifies that the gateway correctly resolves nested asset fields.
      */
     @Test
+    @TestSecurity(user = "testUser", roles = {"user"})
     @DisplayName("Should fetch asset with price via GraphQL")
     public void testAssetQuery() {
         // 1. Mock gRPC response from market-service
