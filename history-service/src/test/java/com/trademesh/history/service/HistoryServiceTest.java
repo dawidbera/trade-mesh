@@ -2,8 +2,8 @@ package com.trademesh.history.service;
 
 import com.trademesh.history.grpc.HistoryQueryRequest;
 import com.trademesh.history.grpc.HistoryQueryResponse;
-import com.trademesh.market.model.MarketPrice;
 import io.quarkus.test.junit.QuarkusTest;
+import io.vertx.core.json.JsonObject;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,8 +33,8 @@ public class HistoryServiceTest {
     public void testArchivalAndQuery() {
         String assetId = "AAPL";
         
-        // 1. Simulate receiving a price update via the RabbitMQ consumer
-        historyService.archivePrice(new MarketPrice(assetId, 150.0));
+        // 1. Simulate receiving a price update via the RabbitMQ consumer using JsonObject
+        historyService.archivePrice(new JsonObject().put("assetId", assetId).put("value", 150.0).put("timestamp", System.currentTimeMillis()));
 
         // 2. Query historical data (Phase 3 returns mock data)
         HistoryQueryRequest request = HistoryQueryRequest.newBuilder()

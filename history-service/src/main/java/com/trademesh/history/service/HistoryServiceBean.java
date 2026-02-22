@@ -31,9 +31,12 @@ public class HistoryServiceBean implements HistoryService {
      * @param price The price event received from the message bus.
      */
     @Incoming("market-prices")
-    public void archivePrice(MarketPrice price) {
-        LOG.debugf("Archiving price for %s: %.2f", price.assetId, price.value);
-        recorder.recordPriceAsTransaction(price.assetId, price.value);
+    @io.smallrye.common.annotation.Blocking
+    public void archivePrice(io.vertx.core.json.JsonObject price) {
+        String assetId = price.getString("assetId");
+        double value = price.getDouble("value");
+        LOG.debugf("Archiving price for %s: %.2f", assetId, value);
+        recorder.recordPriceAsTransaction(assetId, value);
     }
 
     /**
@@ -42,6 +45,7 @@ public class HistoryServiceBean implements HistoryService {
      * @return A Uni emitting the transaction response.
      */
     @Override
+    @io.smallrye.common.annotation.Blocking
     public Uni<TransactionResponse> recordTransaction(TransactionRequest request) {
         recorder.recordPriceAsTransaction(request.getAssetId(), request.getPrice());
 
@@ -57,6 +61,7 @@ public class HistoryServiceBean implements HistoryService {
      * @return A Uni emitting the history query response with OHLC series.
      */
     @Override
+    @io.smallrye.common.annotation.Blocking
     public Uni<HistoryQueryResponse> getHistoricalData(HistoryQueryRequest request) {
         // Simple mock of OHLC data for now.
         // In real app, this would be a TimescaleDB continuous aggregate query.

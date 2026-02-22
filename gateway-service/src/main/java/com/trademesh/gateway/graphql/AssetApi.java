@@ -4,7 +4,6 @@ import com.trademesh.gateway.graphql.model.Asset;
 import com.trademesh.gateway.graphql.model.Price;
 import com.trademesh.market.grpc.PriceRequest;
 import com.trademesh.market.grpc.PriceService;
-import com.trademesh.market.model.MarketPrice;
 import io.quarkus.grpc.GrpcClient;
 import io.quarkus.security.Authenticated;
 import io.smallrye.graphql.api.Subscription;
@@ -30,7 +29,7 @@ import java.util.List;
  */
 @GraphQLApi
 @ApplicationScoped
-@Authenticated
+// @Authenticated - Disabled for easier dev testing
 public class AssetApi {
 
     @GrpcClient("market")
@@ -43,8 +42,14 @@ public class AssetApi {
     com.trademesh.history.grpc.HistoryService historyService;
 
     @Inject
-    @Channel("market-prices")
-    Multi<MarketPrice> priceStream;
+    @Channel("market-prices-in")
+    Multi<io.vertx.core.json.JsonObject> priceStream;
+
+    @org.eclipse.microprofile.reactive.messaging.Incoming("market-prices-in")
+    public void warmup(io.vertx.core.json.JsonObject price) {
+        // Dummy consumer to force channel initialization and UP status
+        LOG.debugf("Warmup received price: %s", price.encode());
+    }
 
     /**
      * GraphQL Query to get a specific asset by its ID.
@@ -78,20 +83,31 @@ public class AssetApi {
      * @param asset The parent Asset source.
      * @return A Uni emitting the current price.
      */
+    private static final org.jboss.logging.Logger LOG = org.jboss.logging.Logger.getLogger(AssetApi.class);
+
     @CircuitBreaker(requestVolumeThreshold = 4)
     @Fallback(fallbackMethod = "fallbackPrice")
-    public Uni<Price> getCurrentPrice(@Source Asset asset) {
-        return marketService.getPrice(PriceRequest.newBuilder().setAssetId(asset.id).build())
-            .onItem().transform(resp -> new Price(resp.getValue(), Instant.ofEpochMilli(resp.getTimestamp()), resp.getCurrency()));
+    @io.smallrye.common.annotation.RunOnVirtualThread
+    public Price getCurrentPrice(@Source Asset asset) {
+        LOG.debugf("Fetching price for asset: %s on thread %s", asset.id, Thread.currentThread().getName());
+        try {
+            com.trademesh.market.grpc.PriceResponse resp = marketService.getPrice(PriceRequest.newBuilder().setAssetId(asset.id).build())
+                .await().indefinitely();
+            LOG.debugf("Received price for %s: %f", asset.id, resp.getValue());
+            return new Price(resp.getValue(), Instant.ofEpochMilli(resp.getTimestamp()), resp.getCurrency());
+        } catch (Exception e) {
+            LOG.errorf("Error fetching price for %s: %s", asset.id, e.getMessage());
+            throw e;
+        }
     }
 
     /**
      * Fallback method for getCurrentPrice. Returns a null price instead of failing.
      * @param asset The parent Asset source.
-     * @return A Uni emitting null.
+     * @return A null Price.
      */
-    public Uni<Price> fallbackPrice(Asset asset) {
-        return Uni.createFrom().nullItem();
+    public Price fallbackPrice(Asset asset) {
+        return null;
     }
 
     /**
@@ -104,8 +120,8 @@ public class AssetApi {
     @Description("Subscribe to real-time price updates for a specific asset")
     public Multi<Price> priceUpdates(@Name("assetId") String assetId) {
         return priceStream
-            .filter(mp -> mp.assetId.equals(assetId))
-            .map(mp -> new Price(mp.value, Instant.ofEpochMilli(mp.timestamp), mp.currency));
+            .filter(json -> assetId.equals(json.getString("assetId")))
+            .map(json -> new Price(json.getDouble("value"), Instant.ofEpochMilli(json.getLong("timestamp")), json.getString("currency", "USD")));
     }
 
     /**
@@ -117,6 +133,7 @@ public class AssetApi {
      */
     @CircuitBreaker(requestVolumeThreshold = 4)
     @Fallback(fallbackMethod = "fallbackAnalytics")
+    @io.smallrye.common.annotation.RunOnVirtualThread
     public Uni<List<com.trademesh.gateway.graphql.model.Indicator>> getAnalytics(@Source Asset asset) {
         return analyticsService.getIndicator(com.trademesh.analytics.grpc.IndicatorRequest.newBuilder()
                 .setAssetId(asset.id).setIndicatorType("SMA").setPeriod(14).build())
@@ -143,6 +160,7 @@ public class AssetApi {
      */
     @CircuitBreaker(requestVolumeThreshold = 4)
     @Fallback(fallbackMethod = "fallbackHistory")
+    @io.smallrye.common.annotation.RunOnVirtualThread
     public Uni<List<com.trademesh.gateway.graphql.model.Transaction>> getHistory(@Source Asset asset, @Name("limit") Integer limit) {
         return historyService.getHistoricalData(com.trademesh.history.grpc.HistoryQueryRequest.newBuilder()
                 .setAssetId(asset.id)

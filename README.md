@@ -17,26 +17,27 @@ The system follows the **Backend-for-Frontend (BFF)** pattern with a high-speed 
 ```mermaid
 graph TD
     subgraph "External World"
-        Client[Angular 21 Client]
+        Client[Angular 21 Client :4200]
     end
 
     subgraph "Security Layer"
-        Auth[Keycloak / OIDC]
+        Auth[Keycloak / OIDC :8180]
         Vault[HashiCorp Vault]
     end
 
-    subgraph "TradeMesh Gateway (BFF)"
+    subgraph "TradeMesh Gateway (BFF) :8084"
+        CORS[Global CORS Filter]
         Gateway[GraphQL Gateway]
     end
 
     subgraph "gRPC Mesh (Internal - Sync)"
-        Market[Market Data Engine]
-        Analytics[Analytics Service]
-        History[History Service]
+        Market[Market Data Engine :8081]
+        Analytics[Analytics Service :8082]
+        History[History Service :8083]
     end
 
     subgraph "Asynchronous Event Bus"
-        RabbitMQ{RabbitMQ / market.prices}
+        RabbitMQ{RabbitMQ / market.prices :5672}
     end
 
     subgraph "Persistence Layer"
@@ -45,19 +46,20 @@ graph TD
     end
 
     %% Request Flows
-    Client -- "1. GraphQL Query (Route)" --> Gateway
-    Gateway -- "2. Validate JWT" --> Auth
+    Client -- "1. GraphQL Query (CORS handled)" --> CORS
+    CORS --> Gateway
+    Gateway -. "2. Validate JWT (Bypassed Locally)" .-> Auth
     Gateway -- "3. Fetch Secrets" --> Vault
     
     %% Internal gRPC calls (Sync)
-    Gateway -- "4. gRPC (Service Mesh)" --> Market
-    Gateway -- "4. gRPC (Service Mesh)" --> Analytics
-    Gateway -- "4. gRPC (Service Mesh)" --> History
+    Gateway -- "4. gRPC (Virtual Threads Parallel Fetch)" --> Market
+    Gateway -- "4. gRPC (Virtual Threads Parallel Fetch)" --> Analytics
+    Gateway -- "4. gRPC (Virtual Threads Parallel Fetch)" --> History
 
     %% Event Flow (Async)
     Market -- "5. Pub JSON" --> RabbitMQ
-    RabbitMQ -- "6. Sub" --> Analytics
-    RabbitMQ -- "6. Sub" --> History
+    RabbitMQ -- "6. Sub (JsonObject)" --> Analytics
+    RabbitMQ -- "6. Sub (JsonObject)" --> History
     RabbitMQ -- "6. Sub WS Push" --> Gateway
     
     %% Storage
@@ -67,11 +69,12 @@ graph TD
 ```
 
 ### Data Flow Lifecycle:
-1. **Synchronous (BFF):** User requests an asset via GraphQL. Gateway fetches live data, indicators, and history in parallel via gRPC using **Java 21 Virtual Threads**.
+1. **Synchronous (BFF):** User requests an asset via GraphQL. Gateway fetches live data, indicators, and history in parallel via gRPC using **Java 21 Virtual Threads** (`@RunOnVirtualThread`). Cross-origin requests are enabled via a **GlobalCorsFilter**.
 2. **Resilience:** If any backend fails, **Circuit Breakers** trigger **Fallbacks**, ensuring partial data delivery.
-3. **Asynchronous (Data Mesh):** Market Engine generates price ticks and broadcasts them to **RabbitMQ**. 
-4. **Real-time:** Gateway consumes RabbitMQ events and pushes them to the client via **WebSockets (GraphQL Subscriptions)**.
+3. **Asynchronous (Data Mesh):** Market Engine generates price ticks and broadcasts them to **RabbitMQ** as JSON.
+4. **Real-time:** Gateway consumes RabbitMQ events as `JsonObject` and pushes them to the client via **WebSockets (GraphQL Subscriptions)** using **Broadcast** mode.
 5. **Reliability:** Services implement **Semantic Warm-up** logic to ensure readiness before traffic ingestion.
+
 
 ## 🧠 Logic & Testability
 The system implements a **Separated Logic Layer** to ensure high reliability and fast feedback loops:
@@ -127,9 +130,10 @@ Located in `infra/terraform/`, these files manage the foundation for the Red Hat
 ---
 
 ## 🧪 Testing
-To run integration tests across all services (requires Docker for DevServices):
+To run tests across all services (requires Docker for DevServices):
 ```bash
-for d in *-service; do (cd "$d" && ./mvnw test -B); done
+# In headless environments (CLI/CI), use xvfb-run:
+xvfb-run ./run_tests.sh
 ```
 
 ## 🛠️ Build & Compilation

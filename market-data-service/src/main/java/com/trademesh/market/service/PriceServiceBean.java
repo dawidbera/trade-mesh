@@ -39,6 +39,7 @@ public class PriceServiceBean implements PriceService {
      * @return A Uni emitting the price response.
      */
     @Override
+    @io.smallrye.common.annotation.Blocking
     public Uni<PriceResponse> getPrice(PriceRequest request) {
         String assetId = request.getAssetId();
         Double currentPrice = priceCommands.get("price:" + assetId);
@@ -66,6 +67,7 @@ public class PriceServiceBean implements PriceService {
      * @return A Multi emitting a stream of price responses.
      */
     @Override
+    @io.smallrye.common.annotation.Blocking
     public Multi<PriceResponse> streamPrices(PriceRequest request) {
         String assetId = request.getAssetId();
         

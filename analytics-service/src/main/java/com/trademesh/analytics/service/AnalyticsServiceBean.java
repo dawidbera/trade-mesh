@@ -46,10 +46,13 @@ public class AnalyticsServiceBean implements AnalyticsService {
      * @param price The price event received from the message bus.
      */
     @Incoming("market-prices")
-    public void consumePrice(MarketPrice price) {
-        LOG.debugf("Received price for %s: %.2f", price.assetId, price.value);
-        priceLists.lpush("history:" + price.assetId, price.value);
-        priceLists.ltrim("history:" + price.assetId, 0, 99); // Keep last 100 prices
+    @io.smallrye.common.annotation.Blocking
+    public void consumePrice(io.vertx.core.json.JsonObject price) {
+        String assetId = price.getString("assetId");
+        double value = price.getDouble("value");
+        LOG.debugf("Received price for %s: %.2f", assetId, value);
+        priceLists.lpush("history:" + assetId, value);
+        priceLists.ltrim("history:" + assetId, 0, 99); // Keep last 100 prices
     }
 
     /**
@@ -59,6 +62,7 @@ public class AnalyticsServiceBean implements AnalyticsService {
      * @return A Uni emitting the indicator response.
      */
     @Override
+    @io.smallrye.common.annotation.Blocking
     public Uni<IndicatorResponse> getIndicator(IndicatorRequest request) {
         String assetId = request.getAssetId();
         String type = request.getIndicatorType();
@@ -92,6 +96,7 @@ public class AnalyticsServiceBean implements AnalyticsService {
      * @return A Multi emitting a stream of indicator responses.
      */
     @Override
+    @io.smallrye.common.annotation.Blocking
     public Multi<IndicatorResponse> streamIndicators(IndicatorRequest request) {
         return Multi.createFrom().ticks().every(Duration.ofSeconds(2))
             .onItem().transformToUniAndConcatenate(tick -> getIndicator(request));
