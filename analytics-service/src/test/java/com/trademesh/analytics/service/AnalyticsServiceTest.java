@@ -2,8 +2,8 @@ package com.trademesh.analytics.service;
 
 import com.trademesh.analytics.grpc.IndicatorRequest;
 import com.trademesh.analytics.grpc.IndicatorResponse;
-import com.trademesh.market.model.MarketPrice;
 import io.quarkus.test.junit.QuarkusTest;
+import io.vertx.core.json.JsonObject;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,9 +31,9 @@ public class AnalyticsServiceTest {
     public void testSmaCalculation() {
         String assetId = "BTC";
         
-        // 1. Simulate receiving prices through the RabbitMQ consumer method
-        analyticsService.consumePrice(new MarketPrice(assetId, 100.0));
-        analyticsService.consumePrice(new MarketPrice(assetId, 200.0));
+        // 1. Simulate receiving prices through the RabbitMQ consumer method using JsonObject
+        analyticsService.consumePrice(new JsonObject().put("assetId", assetId).put("value", 100.0).put("timestamp", System.currentTimeMillis()));
+        analyticsService.consumePrice(new JsonObject().put("assetId", assetId).put("value", 200.0).put("timestamp", System.currentTimeMillis()));
 
         // 2. Request SMA with period 2
         IndicatorRequest request = IndicatorRequest.newBuilder()

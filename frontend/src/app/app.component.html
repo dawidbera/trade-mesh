@@ -1,0 +1,40 @@
+<header>
+  <div class="header-container">
+    <h1>{{ title }}</h1>
+    <div class="user-info">
+      <ng-container *ngIf="isLoggedIn; else loginTmpl">
+        <span>Welcome, {{ userProfile?.firstName }} {{ userProfile?.lastName }}</span>
+        <button (click)="logout()">Logout</button>
+      </ng-container>
+      <ng-template #loginTmpl>
+        <button (click)="login()">Login with Keycloak</button>
+      </ng-template>
+    </div>
+  </div>
+</header>
+
+<main class="dashboard-container">
+  <div *ngIf="isLoggedIn; else promoTmpl" class="price-board">
+    <h2>Market Overview</h2>
+    <div class="grid">
+      <div class="card" *ngFor="let asset of prices$ | async">
+        <h3>{{ asset.symbol }}</h3>
+        <p class="price">{{ asset.currentPrice?.value | currency }}</p>
+        <p class="timestamp">Last Updated: {{ asset.currentPrice?.timestamp | date:'mediumTime' }}</p>
+      </div>
+    </div>
+    <div *ngIf="(prices$ | async)?.length === 0" class="no-data">
+      <p>Fetching market data...</p>
+    </div>
+  </div>
+
+  <ng-template #promoTmpl>
+    <div class="promo">
+      <h2>High-performance Financial Data Mesh</h2>
+      <p>Log in to access real-time market data, analytics, and transaction history.</p>
+      <button class="primary" (click)="login()">Get Started</button>
+    </div>
+  </ng-template>
+</main>
+
+<router-outlet></router-outlet>
