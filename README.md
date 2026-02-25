@@ -81,34 +81,13 @@ graph TD
 ```
 
 ### Data Flow Lifecycle:
-1. **Synchronous (BFF):** User requests an asset via GraphQL. Gateway fetches live data, indicators, and historical **OHLC** in parallel via gRPC using **Java 21 Virtual Threads** (`@RunOnVirtualThread`). Cross-origin requests are enabled via a **GlobalCorsFilter**.
-2. **Resilience:** If any backend fails, **Circuit Breakers** trigger **Fallbacks**, ensuring partial data delivery.
-3. **Asynchronous (Data Mesh):** Market Engine generates price ticks and broadcasts them to **RabbitMQ** as JSON.
-4. **Real-time:** Gateway consumes RabbitMQ events as `JsonObject` and pushes them to the client via **GraphQL Subscriptions (WebSockets)**. The UI features a **Dynamic Asset Selector** for live candlestick updates.
-5. **Security:** All production secrets (RabbitMQ, DB, Keycloak) are dynamically retrieved from **HashiCorp Vault** at runtime.
-6. **Self-Healing:** Services implement **Semantic Warm-up** logic to ensure readiness. **Database Deadlock Buster** monitors connection pools in real-time, triggering automated Pod restarts via LivenessProbes if pool exhaustion is detected.
+1. **Synchronous (BFF):** User requests an asset via GraphQL. Gateway fetches live data, indicators, and historical **OHLC** in parallel via gRPC using **Java 21 Virtual Threads**.
+2. **Resilience:** Circuit Breakers trigger **Fallbacks** if backend services are slow or down.
+3. **Asynchronous (Data Mesh):** Market Engine generates price ticks and broadcasts them to **RabbitMQ**.
+4. **Real-time:** Gateway consumes RabbitMQ events and pushes them to the client via **GraphQL Subscriptions**.
+5. **Security:** All production secrets are retrieved from **HashiCorp Vault** at runtime.
+6. **Self-Healing:** **Database Deadlock Buster** and **Semantic Warm-up** ensure high availability.
 
-
-## 🧠 Logic & Testability
-The system implements a **Separated Logic Layer** to ensure high reliability and fast feedback loops:
-- **Core Algorithms:** Decoupled from framework-specific code (e.g., `SmaCalculator`, `PriceEngine`).
-- **Entity Factories:** Isolated creation logic (e.g., `TransactionFactory`) for predictable JPA state.
-- **Fast Feedback:** Business logic is verified via **Pure Unit Tests** (< 1s execution).
-
-## ✅ Quality Assurance
-The platform follows a rigorous testing strategy:
-- **CI (GitHub):** Every push to `master` triggers a **GitHub Actions** pipeline to run full Unit and Integration test suites.
-- **Headless Testing:** Frontend tests run in CI using **Xvfb (X Virtual FrameBuffer)** to simulate a display for Chrome.
-- **Build & Deploy (OpenShift):** After successful CI, images are built internally on the Red Hat Sandbox using **BuildConfigs (S2I)**.
-- **GitOps (ArgoCD):** Automates the synchronization of the environment state with the latest built images.
-
-## 📡 gRPC Mesh Contracts
-Located in `proto/`, these files define the "Source of Truth" for all communications.
-- **`market.proto`**: Real-time market prices.
-- **`analytics.proto`**: Technical indicators (RSI, MA).
-- **`history.proto`**: Historical data and real OHLC Candlestick series.
-
----
 
 ## 🧪 Testing
 To run tests across all services (requires Docker for DevServices):
@@ -117,10 +96,13 @@ To run tests across all services (requires Docker for DevServices):
 xvfb-run ./run_tests.sh
 ```
 
-## 🛠️ Build & Compilation
-To compile all services and generate gRPC/GraphQL sources:
+## 🚢 Deployment to Red Hat OpenShift
+To deploy the entire stack (Infrastructure + Backend) automatically to your Red Hat Sandbox:
 ```bash
-for d in *-service; do (cd "$d" && ./mvnw compile -DskipTests); done
+./deploy_to_openshift.sh
 ```
-
----
+This script will:
+- Verify your `oc login` status.
+- Provision database and messaging via Terraform.
+- Trigger OpenShift S2I builds for all backend microservices.
+- Expose public Routes for the Gateway.
