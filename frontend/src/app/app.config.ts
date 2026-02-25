@@ -33,7 +33,14 @@ export const appConfig: ApplicationConfig = {
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
     provideHttpClient(withFetch()),
-    provideHighcharts({ instance: () => import('highcharts') }),
+    provideHighcharts({ 
+      instance: () => import('highcharts').then(hc => {
+        return import('highcharts/modules/stock').then(stock => {
+          stock.default(hc);
+          return hc;
+        });
+      })
+    }),
     importProvidersFrom(KeycloakAngularModule),
     /* {
       provide: APP_INITIALIZER,
