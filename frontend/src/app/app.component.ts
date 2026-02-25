@@ -21,7 +21,8 @@ export class AppComponent implements OnInit {
     title: { text: 'Real-time Market Data', style: { color: '#ffffff' } },
     xAxis: { type: 'datetime', labels: { style: { color: '#ffffff' } } },
     yAxis: { title: { text: 'Price', style: { color: '#ffffff' } }, labels: { style: { color: '#ffffff' } } },
-    series: [{ name: 'Market Price', data: [], color: '#00ff00', type: 'line' }]
+    series: [{ name: 'Market Price', data: [], color: '#00ff00', type: 'line', dataLabels: { enabled: true, style: { color: '#ffffff' } } }],
+    credits: { enabled: false }
   };
   chartUpdateFlag = false;
 
@@ -38,6 +39,7 @@ export class AppComponent implements OnInit {
   constructor(private keycloak: KeycloakService, private apollo: Apollo) {}
 
   async ngOnInit() {
+    console.log('AppComponent initialized');
     this.isLoggedIn = true;
     this.userProfile = { firstName: 'Test', lastName: 'User' };
     this.fetchData();
@@ -52,22 +54,14 @@ export class AppComponent implements OnInit {
     this.isLoggedIn = false;
   }
 
-  selectAsset(id: string) {
-    this.selectedAssetId = id;
-    this.chartOptions.title.text = `Real-time Market Data: ${id}`;
-    this.chartOptions.series[0].data = []; // Clear current chart data
-    this.chartUpdateFlag = true;
-    
-    // Refresh data and subscription for the new asset
-    this.fetchData();
-  }
-
   fetchData() {
-    // Clean up previous subscription if exists
+    console.log(`Fetching data for: ${this.selectedAssetId}`);
     if (this.subscription) {
       this.subscription.unsubscribe();
     }
 
+    const currentAsset = this.selectedAssetId;
+    
     const QUERY = gql`
       query GetDashboardData($id: String!) {
         allAssets {
@@ -103,58 +97,76 @@ export class AppComponent implements OnInit {
 
     this.prices$ = this.apollo.watchQuery<any>({
       query: QUERY,
-      variables: { id: this.selectedAssetId },
-      pollInterval: 5000
+      variables: { id: currentAsset },
+      pollInterval: 5000,
+      fetchPolicy: 'network-only'
     }).valueChanges.pipe(map(result => {
+      console.log('Query result received:', result);
       const assets = result.data?.allAssets || [];
       const selected = assets.find((a: any) => a.symbol === this.selectedAssetId);
-      if (selected && selected.ohlcHistory) {
+      if (selected && selected.ohlcHistory && this.selectedAssetId === currentAsset) {
+        console.log(`Updating chart for ${this.selectedAssetId} with ${selected.ohlcHistory.length} points`);
         this.updateCandlestickChart(selected.ohlcHistory);
       }
       return assets;
     }));
 
-    // Subscription for selected asset updates
+    console.log(`Starting subscription for: ${currentAsset}`);
     this.subscription = this.apollo.subscribe({
       query: gql`
         subscription OnPriceUpdate($assetId: String!) {
           priceUpdates(assetId: $assetId) {
+            assetId
             value
             timestamp
           }
         }
       `,
-      variables: { assetId: this.selectedAssetId }
+      variables: { assetId: currentAsset }
     }).subscribe({
       next: (result: any) => {
-        if (result.data?.priceUpdates) {
-          const update = result.data.priceUpdates;
+        const update = result.data?.priceUpdates;
+        console.log('Subscription update received:', update);
+        if (update && update.assetId === this.selectedAssetId) {
           this.updateChart(update.timestamp, update.value);
         }
-      }
+      },
+      error: (err) => console.error('Subscription error details:', err)
     });
   }
 
   updateCandlestickChart(history: any[]) {
     if (this.chartOptions.series) {
-      const data = history.map(h => ({
-        x: new Date(h.timestamp).getTime(),
-        open: h.open,
-        high: h.high,
-        low: h.low,
-        close: h.close
-      }));
-      this.chartOptions.series[0].data = data.map(d => [d.x, d.open, d.high, d.low, d.close]);
-      this.chartOptions.chart.type = 'candlestick';
+      const data = history.map(h => [
+        new Date(h.timestamp).getTime(),
+        h.close // Use close price for the line chart
+      ]).sort((a, b) => a[0] - b[0]);
+      
+      this.chartOptions = {
+        ...this.chartOptions,
+        series: [{
+          ...this.chartOptions.series[0],
+          data: data
+        }]
+      };
       this.chartUpdateFlag = true;
     }
   }
 
   updateChart(time: number, value: number) {
-    if (this.chartOptions.series && this.chartOptions.chart.type === 'line') {
-      const data = this.chartOptions.series[0].data as any[];
-      data.push([time, value]);
+    if (this.chartOptions.series) {
+      const data = [...this.chartOptions.series[0].data];
+      const timestamp = new Date(time).getTime();
+      data.push([timestamp, value]);
       if (data.length > 20) data.shift();
+      
+      this.chartOptions = {
+        ...this.chartOptions,
+        series: [{
+          ...this.chartOptions.series[0],
+          data: data
+        }]
+      };
       this.chartUpdateFlag = true;
     }
   }

@@ -45,10 +45,12 @@ public class AssetApi {
     @Channel("market-prices-in")
     Multi<io.vertx.core.json.JsonObject> priceStream;
 
+    private static final io.smallrye.mutiny.operators.multi.processors.BroadcastProcessor<io.vertx.core.json.JsonObject> processor = io.smallrye.mutiny.operators.multi.processors.BroadcastProcessor.create();
+
     @org.eclipse.microprofile.reactive.messaging.Incoming("market-prices-in")
-    public void warmup(io.vertx.core.json.JsonObject price) {
-        // Dummy consumer to force channel initialization and UP status
-        LOG.debugf("Warmup received price: %s", price.encode());
+    public void consume(io.vertx.core.json.JsonObject price) {
+        LOG.infof("Gateway received message from RabbitMQ for asset: %s", price.getString("assetId"));
+        processor.onNext(price);
     }
 
     /**
@@ -89,12 +91,12 @@ public class AssetApi {
     @Fallback(fallbackMethod = "fallbackPrice")
     @io.smallrye.common.annotation.RunOnVirtualThread
     public Price getCurrentPrice(@Source Asset asset) {
-        LOG.debugf("Fetching price for asset: %s on thread %s", asset.id, Thread.currentThread().getName());
+        LOG.infof("Fetching price for asset: %s on thread %s", asset.id, Thread.currentThread().getName());
         try {
             com.trademesh.market.grpc.PriceResponse resp = marketService.getPrice(PriceRequest.newBuilder().setAssetId(asset.id).build())
                 .await().indefinitely();
-            LOG.debugf("Received price for %s: %f", asset.id, resp.getValue());
-            return new Price(resp.getValue(), Instant.ofEpochMilli(resp.getTimestamp()), resp.getCurrency());
+            LOG.infof("Received price for %s: %f", asset.id, resp.getValue());
+            return new Price(asset.id, resp.getValue(), Instant.ofEpochMilli(resp.getTimestamp()), resp.getCurrency());
         } catch (Exception e) {
             LOG.errorf("Error fetching price for %s: %s", asset.id, e.getMessage());
             throw e;
@@ -119,9 +121,9 @@ public class AssetApi {
     @Subscription
     @Description("Subscribe to real-time price updates for a specific asset")
     public Multi<Price> priceUpdates(@Name("assetId") String assetId) {
-        return priceStream
+        return processor
             .filter(json -> assetId.equals(json.getString("assetId")))
-            .map(json -> new Price(json.getDouble("value"), Instant.ofEpochMilli(json.getLong("timestamp")), json.getString("currency", "USD")));
+            .map(json -> new Price(json.getString("assetId"), json.getDouble("value"), Instant.ofEpochMilli(json.getLong("timestamp")), json.getString("currency", "USD")));
     }
 
     /**
@@ -185,7 +187,7 @@ public class AssetApi {
     @Fallback(fallbackMethod = "fallbackOhlc")
     @io.smallrye.common.annotation.RunOnVirtualThread
     public Uni<List<com.trademesh.gateway.graphql.model.OHLCPoint>> getOhlcHistory(@Source com.trademesh.gateway.graphql.model.Asset asset, @Name("interval") String interval) {
-        LOG.debugf("Fetching real OHLC history for %s via gRPC", asset.id);
+        LOG.infof("Fetching real OHLC history for %s via gRPC", asset.id);
         return historyService.getHistoricalData(com.trademesh.history.grpc.HistoryQueryRequest.newBuilder()
                 .setAssetId(asset.id)
                 .setStartTimestamp(Instant.now().minusSeconds(3600 * 24).toEpochMilli()) // Last 24 hours

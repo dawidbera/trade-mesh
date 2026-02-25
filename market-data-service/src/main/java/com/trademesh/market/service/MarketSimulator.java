@@ -74,7 +74,7 @@ public class MarketSimulator {
                 // Publish to RabbitMQ
                 priceEmitter.send(new MarketPrice(assetId, newPrice));
                 
-                LOG.debugf("Asset %s price updated to %.2f and published", assetId, newPrice);
+                LOG.infof("Asset %s price updated to %.2f and published", assetId, newPrice);
             }
         });
     }
