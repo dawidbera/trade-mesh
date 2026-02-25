@@ -31,6 +31,9 @@ export class AppComponent implements OnInit {
   prices$: Observable<any[]> | undefined;
   indicators$: Observable<any[]> | undefined;
   history$: Observable<any[]> | undefined;
+  
+  selectedAssetId = 'BTC';
+  private subscription: any;
 
   constructor(private keycloak: KeycloakService, private apollo: Apollo) {}
 
@@ -49,9 +52,24 @@ export class AppComponent implements OnInit {
     this.isLoggedIn = false;
   }
 
+  selectAsset(id: string) {
+    this.selectedAssetId = id;
+    this.chartOptions.title.text = `Real-time Market Data: ${id}`;
+    this.chartOptions.series[0].data = []; // Clear current chart data
+    this.chartUpdateFlag = true;
+    
+    // Refresh data and subscription for the new asset
+    this.fetchData();
+  }
+
   fetchData() {
+    // Clean up previous subscription if exists
+    if (this.subscription) {
+      this.subscription.unsubscribe();
+    }
+
     const QUERY = gql`
-      query GetDashboardData {
+      query GetDashboardData($id: String!) {
         allAssets {
           id
           symbol
@@ -85,33 +103,32 @@ export class AppComponent implements OnInit {
 
     this.prices$ = this.apollo.watchQuery<any>({
       query: QUERY,
+      variables: { id: this.selectedAssetId },
       pollInterval: 5000
     }).valueChanges.pipe(map(result => {
       const assets = result.data?.allAssets || [];
-      // Use BTC history for the main chart
-      const btc = assets.find((a: any) => a.symbol === 'BTC');
-      if (btc && btc.ohlcHistory) {
-        this.updateCandlestickChart(btc.ohlcHistory);
+      const selected = assets.find((a: any) => a.symbol === this.selectedAssetId);
+      if (selected && selected.ohlcHistory) {
+        this.updateCandlestickChart(selected.ohlcHistory);
       }
       return assets;
     }));
 
-    // Subscription for BTC updates to drive the chart
-    this.apollo.subscribe({
+    // Subscription for selected asset updates
+    this.subscription = this.apollo.subscribe({
       query: gql`
-        subscription OnPriceUpdate {
-          priceUpdates(assetId: "BTC") {
+        subscription OnPriceUpdate($assetId: String!) {
+          priceUpdates(assetId: $assetId) {
             value
             timestamp
           }
         }
-      `
+      `,
+      variables: { assetId: this.selectedAssetId }
     }).subscribe({
       next: (result: any) => {
         if (result.data?.priceUpdates) {
           const update = result.data.priceUpdates;
-          // When a real price tick comes in, we also update the chart
-          // (Simple logic: just update the last point or add new one)
           this.updateChart(update.timestamp, update.value);
         }
       }
@@ -127,7 +144,6 @@ export class AppComponent implements OnInit {
         low: h.low,
         close: h.close
       }));
-      // Using candlestick format for the chart
       this.chartOptions.series[0].data = data.map(d => [d.x, d.open, d.high, d.low, d.close]);
       this.chartOptions.chart.type = 'candlestick';
       this.chartUpdateFlag = true;
