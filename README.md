@@ -4,11 +4,12 @@ TradeMesh is a cloud-native, real-time financial data platform designed specific
 
 ## 🚀 Key Features
 - **Real-time gRPC Mesh:** Low-latency communication between microservices using server-side streaming.
-- **GraphQL API Gateway:** Unified entry point for external clients with parallel data fetching.
+- **GraphQL API Gateway:** Unified entry point with parallel data fetching using **Java 21 Virtual Threads**.
 - **Asynchronous Event Bus:** Real-time price distribution using **RabbitMQ**.
-- **Time-Series Persistence:** Hyper-optimized storage using **TimescaleDB** for historical market data.
-- **Self-Healing Infrastructure:** Advanced Kubernetes probes (Semantic Warm-up, Deadlock Buster).
-- **Security-First Design:** HashiCorp Vault for secrets management and Keycloak for IAM.
+- **Time-Series Persistence:** Hyper-optimized storage using **TimescaleDB** (Hypertables + OHLC Aggregates).
+- **Self-Healing Infrastructure:** Advanced Kubernetes probes (**Semantic Warm-up**, **Deadlock Buster**).
+- **Security-First Design:** **HashiCorp Vault** for secrets management and **Keycloak** for OIDC.
+- **Modern UI:** Angular 21 Dashboard with professional **Candlestick Charts** and dynamic asset selection.
 
 ## 🏗️ Architecture & Request Flow
 
@@ -17,17 +18,17 @@ The system follows the **Backend-for-Frontend (BFF)** pattern with a high-speed 
 ```mermaid
 graph TD
     subgraph "External World"
-        Client[Angular 21 Client :4200]
+        Client[Angular 21 Client + Candlestick Charts :4200]
     end
 
     subgraph "Security Layer"
         Auth[Keycloak / OIDC :8180]
-        Vault[HashiCorp Vault]
+        Vault[HashiCorp Vault / Secrets Engine]
     end
 
     subgraph "TradeMesh Gateway (BFF) :8084"
         CORS[Global CORS Filter]
-        Gateway[GraphQL Gateway]
+        Gateway[GraphQL Gateway + Dynamic Selection]
     end
 
     subgraph "gRPC Mesh (Internal - Sync)"
@@ -36,44 +37,56 @@ graph TD
         History[History Service :8083]
     end
 
+    subgraph "Self-Healing Layer"
+        Warmup[Semantic Warm-up]
+        Buster[Deadlock Buster Liveness]
+    end
+
     subgraph "Asynchronous Event Bus"
         RabbitMQ{RabbitMQ / market.prices :5672}
     end
 
     subgraph "Persistence Layer"
         Redis[(Redis Cache)]
-        Timescale[(TimescaleDB)]
+        Timescale[(TimescaleDB + Hypertables + OHLC Aggregates)]
     end
 
     %% Request Flows
-    Client -- "1. GraphQL Query (CORS handled)" --> CORS
+    Client -- "1. GraphQL Query + Asset Selector" --> CORS
     CORS --> Gateway
     Gateway -. "2. Validate JWT (Bypassed Locally)" .-> Auth
-    Gateway -- "3. Fetch Secrets" --> Vault
+    Gateway -- "3. Fetch RabbitMQ/DB/OIDC Secrets" --> Vault
     
     %% Internal gRPC calls (Sync)
-    Gateway -- "4. gRPC (Virtual Threads Parallel Fetch)" --> Market
-    Gateway -- "4. gRPC (Virtual Threads Parallel Fetch)" --> Analytics
-    Gateway -- "4. gRPC (Virtual Threads Parallel Fetch)" --> History
+    Gateway -- "4. gRPC (Parallel Fetch OHLC + Price)" --> Market
+    Gateway -- "4. gRPC (Parallel Fetch OHLC + Price)" --> Analytics
+    Gateway -- "4. gRPC (Parallel Fetch OHLC + Price)" --> History
 
     %% Event Flow (Async)
     Market -- "5. Pub JSON" --> RabbitMQ
-    RabbitMQ -- "6. Sub (JsonObject)" --> Analytics
-    RabbitMQ -- "6. Sub (JsonObject)" --> History
-    RabbitMQ -- "6. Sub WS Push" --> Gateway
+    RabbitMQ -- "6. Sub (Filtered by AssetId)" --> Analytics
+    RabbitMQ -- "6. Sub (Filtered by AssetId)" --> History
+    RabbitMQ -- "6. Dynamic WS Push (Filtered)" --> Gateway
     
     %% Storage
     Market -- "Store State" --> Redis
     Analytics -- "Indicators" --> Redis
-    History -- "Archive" --> Timescale
+    History -- "Archive + 1m OHLC Aggregates" --> Timescale
+
+    %% Reliability & Healing
+    History -.-> Buster
+    Gateway -.-> Warmup
+    Analytics -.-> Warmup
+    Market -.-> Warmup
 ```
 
 ### Data Flow Lifecycle:
-1. **Synchronous (BFF):** User requests an asset via GraphQL. Gateway fetches live data, indicators, and history in parallel via gRPC using **Java 21 Virtual Threads** (`@RunOnVirtualThread`). Cross-origin requests are enabled via a **GlobalCorsFilter**.
+1. **Synchronous (BFF):** User requests an asset via GraphQL. Gateway fetches live data, indicators, and historical **OHLC** in parallel via gRPC using **Java 21 Virtual Threads** (`@RunOnVirtualThread`). Cross-origin requests are enabled via a **GlobalCorsFilter**.
 2. **Resilience:** If any backend fails, **Circuit Breakers** trigger **Fallbacks**, ensuring partial data delivery.
 3. **Asynchronous (Data Mesh):** Market Engine generates price ticks and broadcasts them to **RabbitMQ** as JSON.
-4. **Real-time:** Gateway consumes RabbitMQ events as `JsonObject` and pushes them to the client via **WebSockets (GraphQL Subscriptions)** using **Broadcast** mode.
-5. **Reliability:** Services implement **Semantic Warm-up** logic to ensure readiness before traffic ingestion.
+4. **Real-time:** Gateway consumes RabbitMQ events as `JsonObject` and pushes them to the client via **GraphQL Subscriptions (WebSockets)**. The UI features a **Dynamic Asset Selector** for live candlestick updates.
+5. **Security:** All production secrets (RabbitMQ, DB, Keycloak) are dynamically retrieved from **HashiCorp Vault** at runtime.
+6. **Self-Healing:** Services implement **Semantic Warm-up** logic to ensure readiness. **Database Deadlock Buster** monitors connection pools in real-time, triggering automated Pod restarts via LivenessProbes if pool exhaustion is detected.
 
 
 ## 🧠 Logic & Testability
@@ -84,48 +97,16 @@ The system implements a **Separated Logic Layer** to ensure high reliability and
 
 ## ✅ Quality Assurance
 The platform follows a rigorous testing strategy:
-- **CI (GitHub):** Every push to `master` triggers a **GitHub Actions** pipeline to run full Unit and Integration test suites. This ensures code quality before deployment.
-- **Build & Deploy (OpenShift):** After successful CI, images are built **internally** on the Red Hat Sandbox using **BuildConfigs (S2I or Binary Builds)**. Images are stored in the OpenShift Internal Registry.
+- **CI (GitHub):** Every push to `master` triggers a **GitHub Actions** pipeline to run full Unit and Integration test suites.
+- **Headless Testing:** Frontend tests run in CI using **Xvfb (X Virtual FrameBuffer)** to simulate a display for Chrome.
+- **Build & Deploy (OpenShift):** After successful CI, images are built internally on the Red Hat Sandbox using **BuildConfigs (S2I)**.
 - **GitOps (ArgoCD):** Automates the synchronization of the environment state with the latest built images.
-- **Contract Verification:** Ensures gRPC compatibility across the microservices mesh.
-
-## 🧩 Microservices (Quarkus 3.15+)
-Each service is built using Java 21 and the Mutiny reactive programming model.
-
-1. **`gateway-service`**:
-   - The BFF (Backend for Frontend).
-   - Aggregates gRPC data using Virtual Threads.
-   - Provides GraphQL Query & Subscription (WebSockets) API.
-   - Resilience: Circuit Breakers & Fallbacks.
-
-2. **`market-data-service`**:
-   - Real-time market simulator.
-   - Publishes price ticks to RabbitMQ (`market.prices` exchange).
-   - Manages live state in Redis.
-
-3. **`analytics-service`**:
-   - Computes technical indicators (e.g., SMA).
-   - Consumes live ticks from RabbitMQ.
-   - Stores results in Redis.
-
-4. **`history-service`**:
-   - Time-series archival service.
-   - Consumes live ticks from RabbitMQ.
-   - Persists data into TimescaleDB (PostgreSQL).
 
 ## 📡 gRPC Mesh Contracts
 Located in `proto/`, these files define the "Source of Truth" for all communications.
 - **`market.proto`**: Real-time market prices.
 - **`analytics.proto`**: Technical indicators (RSI, MA).
-- **`history.proto`**: Historical data and OHLC Candlestick series.
-
-## 🏗️ Core Infrastructure (Terraform)
-Located in `infra/terraform/`, these files manage the foundation for the Red Hat OpenShift environment.
-- `database.tf`: Provisions TimescaleDB and Redis.
-- `messaging.tf`: Provisions RabbitMQ Cluster.
-- `security.tf`: Provisions HashiCorp Vault.
-- `iam.tf`: Provisions Keycloak.
-- `main.tf`: Configures NetworkPolicies.
+- **`history.proto`**: Historical data and real OHLC Candlestick series.
 
 ---
 
@@ -141,15 +122,5 @@ To compile all services and generate gRPC/GraphQL sources:
 ```bash
 for d in *-service; do (cd "$d" && ./mvnw compile -DskipTests); done
 ```
-
-To package all services:
-```bash
-for d in *-service; do (cd "$d" && ./mvnw package -DskipTests); done
-```
-
-## 🛠️ Quick Start (Infrastructure)
-1. Ensure you have `oc login` to your Red Hat Sandbox.
-2. Navigate to `trade-mesh/infra/terraform/`.
-3. Run `terraform init` and `terraform apply`.
 
 ---
