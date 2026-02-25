@@ -175,6 +175,41 @@ public class AssetApi {
     }
 
     /**
+     * Nested GraphQL resolver for the Asset.ohlcHistory field.
+     * Fetches real OHLC (Open-High-Low-Close) data points from the history-service via gRPC.
+     * @param asset The parent Asset source.
+     * @param interval Time interval for aggregation (e.g., 1m, 5m). Currently fixed to 1m.
+     * @return A Uni emitting a list of OHLC data points.
+     */
+    @CircuitBreaker(requestVolumeThreshold = 4)
+    @Fallback(fallbackMethod = "fallbackOhlc")
+    @io.smallrye.common.annotation.RunOnVirtualThread
+    public Uni<List<com.trademesh.gateway.graphql.model.OHLCPoint>> getOhlcHistory(@Source com.trademesh.gateway.graphql.model.Asset asset, @Name("interval") String interval) {
+        LOG.debugf("Fetching real OHLC history for %s via gRPC", asset.id);
+        return historyService.getHistoricalData(com.trademesh.history.grpc.HistoryQueryRequest.newBuilder()
+                .setAssetId(asset.id)
+                .setStartTimestamp(Instant.now().minusSeconds(3600 * 24).toEpochMilli()) // Last 24 hours
+                .setEndTimestamp(Instant.now().toEpochMilli())
+                .setInterval(interval != null ? interval : "1m")
+                .build())
+            .onItem().transform(resp -> resp.getSeriesList().stream()
+                .map(ohlc -> new com.trademesh.gateway.graphql.model.OHLCPoint(
+                    Instant.ofEpochMilli(ohlc.getTimestamp()),
+                    ohlc.getOpen(), ohlc.getHigh(), ohlc.getLow(), ohlc.getClose(), ohlc.getVolume()))
+                .toList());
+    }
+
+    /**
+     * Fallback method for getOhlcHistory. Returns an empty list.
+     * @param asset The parent Asset source.
+     * @param interval The interval parameter.
+     * @return A Uni emitting an empty list.
+     */
+    public Uni<List<com.trademesh.gateway.graphql.model.OHLCPoint>> fallbackOhlc(com.trademesh.gateway.graphql.model.Asset asset, String interval) {
+        return Uni.createFrom().item(Collections.emptyList());
+    }
+
+    /**
      * Fallback method for getHistory. Returns an empty list.
      * @param asset The parent Asset source.
      * @param limit The limit parameter.

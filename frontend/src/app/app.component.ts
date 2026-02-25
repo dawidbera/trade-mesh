@@ -71,6 +71,14 @@ export class AppComponent implements OnInit {
             timestamp
             type
           }
+          ohlcHistory(interval: "1m") {
+            timestamp
+            open
+            high
+            low
+            close
+            volume
+          }
         }
       }
     `;
@@ -78,7 +86,15 @@ export class AppComponent implements OnInit {
     this.prices$ = this.apollo.watchQuery<any>({
       query: QUERY,
       pollInterval: 5000
-    }).valueChanges.pipe(map(result => result.data?.allAssets || []));
+    }).valueChanges.pipe(map(result => {
+      const assets = result.data?.allAssets || [];
+      // Use BTC history for the main chart
+      const btc = assets.find((a: any) => a.symbol === 'BTC');
+      if (btc && btc.ohlcHistory) {
+        this.updateCandlestickChart(btc.ohlcHistory);
+      }
+      return assets;
+    }));
 
     // Subscription for BTC updates to drive the chart
     this.apollo.subscribe({
@@ -94,14 +110,32 @@ export class AppComponent implements OnInit {
       next: (result: any) => {
         if (result.data?.priceUpdates) {
           const update = result.data.priceUpdates;
+          // When a real price tick comes in, we also update the chart
+          // (Simple logic: just update the last point or add new one)
           this.updateChart(update.timestamp, update.value);
         }
       }
     });
   }
 
-  updateChart(time: number, value: number) {
+  updateCandlestickChart(history: any[]) {
     if (this.chartOptions.series) {
+      const data = history.map(h => ({
+        x: new Date(h.timestamp).getTime(),
+        open: h.open,
+        high: h.high,
+        low: h.low,
+        close: h.close
+      }));
+      // Using candlestick format for the chart
+      this.chartOptions.series[0].data = data.map(d => [d.x, d.open, d.high, d.low, d.close]);
+      this.chartOptions.chart.type = 'candlestick';
+      this.chartUpdateFlag = true;
+    }
+  }
+
+  updateChart(time: number, value: number) {
+    if (this.chartOptions.series && this.chartOptions.chart.type === 'line') {
       const data = this.chartOptions.series[0].data as any[];
       data.push([time, value]);
       if (data.length > 20) data.shift();

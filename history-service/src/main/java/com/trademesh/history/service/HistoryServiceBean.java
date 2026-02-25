@@ -26,6 +26,9 @@ public class HistoryServiceBean implements HistoryService {
     @Inject
     TransactionRecorder recorder;
 
+    @Inject
+    jakarta.persistence.EntityManager em;
+
     /**
      * Consumes market price updates from RabbitMQ and archives them as transactions.
      * @param price The price event received from the message bus.
@@ -55,30 +58,77 @@ public class HistoryServiceBean implements HistoryService {
     }
 
     /**
-     * Retrieves historical OHLC data for charting.
-     * Currently returns mocked data (Faza 3 placeholder).
+     * Retrieves historical OHLC data for charting from TimescaleDB aggregates.
+     * Falls back to empty list if the aggregate view is not available.
      * @param request The history query request containing asset ID and time range.
      * @return A Uni emitting the history query response with OHLC series.
      */
     @Override
     @io.smallrye.common.annotation.Blocking
     public Uni<HistoryQueryResponse> getHistoricalData(HistoryQueryRequest request) {
-        // Simple mock of OHLC data for now.
-        // In real app, this would be a TimescaleDB continuous aggregate query.
         List<OHLCData> ohlcList = new ArrayList<>();
-        long start = request.getStartTimestamp();
-        long end = request.getEndTimestamp();
-        long step = 60000; // 1 min
+        
+        try {
+            // Check if ohlc_1m view exists before querying
+            Object viewExists = em.createNativeQuery(
+                "SELECT EXISTS (SELECT FROM pg_matviews WHERE matviewname = 'ohlc_1m')")
+                .getSingleResult();
 
-        for (long t = start; t < end; t += step) {
-            ohlcList.add(OHLCData.newBuilder()
-                .setTimestamp(t)
-                .setOpen(100.0 + random.nextDouble() * 10.0)
-                .setHigh(115.0)
-                .setLow(95.0)
-                .setClose(105.0)
-                .setVolume(500.0)
-                .build());
+            String query;
+            if (Boolean.TRUE.equals(viewExists)) {
+                // Use optimized TimescaleDB continuous aggregate
+                query = "SELECT bucket, open, high, low, close, volume FROM ohlc_1m " +
+                        "WHERE assetId = :assetId AND bucket >= :start AND bucket <= :end " +
+                        "ORDER BY bucket ASC";
+            } else {
+                // Fallback to raw transactions for environments without TimescaleDB (like tests)
+                LOG.warn("TimescaleDB OHLC view not found. Falling back to raw transaction aggregation.");
+                query = "SELECT time_bucket_gapfill, open, high, low, close, volume FROM (" +
+                        "  SELECT date_trunc('minute', timestamp) as time_bucket_gapfill, " +
+                        "  (array_agg(price ORDER BY timestamp))[1] as open, " +
+                        "  max(price) as high, min(price) as low, " +
+                        "  (array_agg(price ORDER BY timestamp DESC))[1] as close, " +
+                        "  sum(volume) as volume " +
+                        "  FROM transactions WHERE assetId = :assetId AND timestamp >= :start AND timestamp <= :end " +
+                        "  GROUP BY 1" +
+                        ") sub ORDER BY 1 ASC";
+            }
+
+            @SuppressWarnings("unchecked")
+            List<Object[]> results = em.createNativeQuery(query)
+                .setParameter("assetId", request.getAssetId())
+                .setParameter("start", Instant.ofEpochMilli(request.getStartTimestamp()))
+                .setParameter("end", Instant.ofEpochMilli(request.getEndTimestamp()))
+                .getResultList();
+
+            for (Object[] row : results) {
+                long ts;
+                if (row[0] instanceof java.sql.Timestamp) {
+                    ts = ((java.sql.Timestamp) row[0]).toInstant().toEpochMilli();
+                } else if (row[0] instanceof java.time.Instant) {
+                    ts = ((java.time.Instant) row[0]).toEpochMilli();
+                } else if (row[0] instanceof java.time.OffsetDateTime) {
+                    ts = ((java.time.OffsetDateTime) row[0]).toInstant().toEpochMilli();
+                } else if (row[0] instanceof java.util.Date) {
+                    ts = ((java.util.Date) row[0]).getTime();
+                } else {
+                    LOG.warnf("Unexpected timestamp type: %s", row[0].getClass().getName());
+                    ts = Instant.now().toEpochMilli();
+                }
+
+                ohlcList.add(OHLCData.newBuilder()
+                    .setTimestamp(ts)
+                    .setOpen((Double) row[1])
+                    .setHigh((Double) row[2])
+                    .setLow((Double) row[3])
+                    .setClose((Double) row[4])
+                    .setVolume((Double) row[5])
+                    .build());
+            }
+            LOG.infof("Retrieved %d OHLC records for %s", ohlcList.size(), request.getAssetId());
+            
+        } catch (Exception e) {
+            LOG.error("Failed to fetch historical data", e);
         }
 
         return Uni.createFrom().item(

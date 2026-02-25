@@ -1,18 +1,20 @@
 package com.trademesh.history.service;
 
+import io.agroal.api.AgroalDataSource;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
 import org.jboss.logging.Logger;
 
+import java.sql.Connection;
+import java.sql.Statement;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Executes the semantic warm-up sequence for the History service.
- * Performs a dummy DB query to ensure the connection pool is initialized.
+ * Performs a dummy DB check to ensure the connection pool is initialized.
  */
 @ApplicationScoped
 public class WarmupExecutor {
@@ -23,21 +25,21 @@ public class WarmupExecutor {
     WarmupState state;
 
     @Inject
-    EntityManager em;
+    AgroalDataSource dataSource;
 
     /**
      * Triggered on application startup to initiate the warm-up sequence.
-     * Performs a dummy SQL query to initialize the database connection pool.
      * @param ev Startup event.
      */
     void onStart(@Observes StartupEvent ev) {
         LOG.info("Starting Semantic Warm-up for History Service...");
 
         CompletableFuture.runAsync(() -> {
-            try {
-                // 1. Database Connectivity Check
+            try (Connection conn = dataSource.getConnection();
+                 Statement stmt = conn.createStatement()) {
+                
                 LOG.info("Warming up database connection pool...");
-                em.createNativeQuery("SELECT 1").getSingleResult();
+                stmt.executeQuery("SELECT 1").next();
 
                 // 2. Delay
                 TimeUnit.SECONDS.sleep(1);
