@@ -38,7 +38,7 @@ public class HistoryServiceBean implements HistoryService {
     public void archivePrice(io.vertx.core.json.JsonObject price) {
         String assetId = price.getString("assetId");
         double value = price.getDouble("value");
-        LOG.debugf("Archiving price for %s: %.2f", assetId, value);
+        LOG.infof("Archiving price for %s: %.2f", assetId, value);
         recorder.recordPriceAsTransaction(assetId, value);
     }
 
@@ -82,16 +82,11 @@ public class HistoryServiceBean implements HistoryService {
                         "ORDER BY bucket ASC";
             } else {
                 // Fallback to raw transactions for environments without TimescaleDB (like tests)
-                LOG.warn("TimescaleDB OHLC view not found. Falling back to raw transaction aggregation.");
-                query = "SELECT time_bucket_gapfill, open, high, low, close, volume FROM (" +
-                        "  SELECT date_trunc('minute', timestamp) as time_bucket_gapfill, " +
-                        "  (array_agg(price ORDER BY timestamp))[1] as open, " +
-                        "  max(price) as high, min(price) as low, " +
-                        "  (array_agg(price ORDER BY timestamp DESC))[1] as close, " +
-                        "  sum(volume) as volume " +
-                        "  FROM transactions WHERE assetId = :assetId AND timestamp >= :start AND timestamp <= :end " +
-                        "  GROUP BY 1" +
-                        ") sub ORDER BY 1 ASC";
+                LOG.warn("TimescaleDB OHLC view not found. Falling back to standard aggregation.");
+                query = "SELECT date_trunc('minute', timestamp) as bucket, " +
+                        "MIN(price) as open, MAX(price) as high, MIN(price) as low, MAX(price) as close, SUM(volume) as volume " +
+                        "FROM transactions WHERE assetId = :assetId AND timestamp >= :start AND timestamp <= :end " +
+                        "GROUP BY bucket ORDER BY bucket ASC";
             }
 
             @SuppressWarnings("unchecked")

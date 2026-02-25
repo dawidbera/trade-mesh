@@ -34,11 +34,24 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes),
     provideHttpClient(withFetch()),
     provideHighcharts({ 
-      instance: () => import('highcharts').then(hc => {
-        return import('highcharts/modules/stock').then(stock => {
-          stock.default(hc);
-          return hc;
+      instance: () => import('highcharts').then(async (hc) => {
+        console.log('Highcharts base module loaded');
+        const Highcharts = (hc as any).default || hc;
+        const modules = await Promise.all([
+          import('highcharts/modules/stock'),
+          import('highcharts/modules/accessibility')
+        ]);
+        console.log('Highcharts extra modules loaded');
+        
+        modules.forEach((m, index) => {
+          const initModule = (m as any).default || m;
+          if (typeof initModule === 'function') {
+            console.log(`Initializing Highcharts module index ${index}`);
+            initModule(Highcharts);
+          }
         });
+        
+        return Highcharts;
       })
     }),
     importProvidersFrom(KeycloakAngularModule),
