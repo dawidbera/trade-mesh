@@ -1,6 +1,6 @@
-package com.trademesh.gateway.health;
+package com.trademesh.market.health;
 
-import com.trademesh.gateway.service.WarmupState;
+import com.trademesh.market.service.WarmupState;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.health.HealthCheck;
@@ -24,9 +24,9 @@ public class SemanticReadinessCheck implements HealthCheck {
     @Override
     public HealthCheckResponse call() {
         if (warmupState.isReady()) {
-            return HealthCheckResponse.up("Gateway Service Warm-up Complete");
+            return HealthCheckResponse.up("Market Data Service Warm-up Complete");
         } else {
-            return HealthCheckResponse.down("Service Warming Up...");
+            return HealthCheckResponse.down("Market Data Service Warming Up...");
         }
     }
 }

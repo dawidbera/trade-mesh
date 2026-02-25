@@ -14,17 +14,39 @@
 </header>
 
 <main class="dashboard-container">
-  <div *ngIf="isLoggedIn; else promoTmpl" class="price-board">
-    <h2>Market Overview</h2>
-    <div class="grid">
-      <div class="card" *ngFor="let asset of prices$ | async">
-        <h3>{{ asset.symbol }}</h3>
-        <p class="price">{{ asset.currentPrice?.value | currency }}</p>
-        <p class="timestamp">Last Updated: {{ asset.currentPrice?.timestamp | date:'mediumTime' }}</p>
+  <div *ngIf="isLoggedIn; else promoTmpl" class="dashboard-content">
+    <div class="market-section">
+      <h2>Market Overview</h2>
+      <div class="grid">
+        <div class="card" *ngFor="let asset of prices$ | async">
+          <div class="asset-header">
+            <h3>{{ asset.symbol }}</h3>
+            <span class="price">{{ asset.currentPrice?.value | currency }}</span>
+          </div>
+          <div class="indicators" *ngIf="asset.analytics?.length > 0">
+            <div *ngFor="let ind of asset.analytics" class="indicator-tag">
+              {{ ind.indicatorType }}: {{ ind.value | number:'1.2-2' }}
+            </div>
+          </div>
+          <div class="history-list" *ngIf="asset.history?.length > 0">
+            <p class="section-title">Last Activity</p>
+            <ul>
+              <li *ngFor="let tx of asset.history">
+                {{ tx.type }} {{ tx.price | currency }} - {{ tx.timestamp | date:'shortTime' }}
+              </li>
+            </ul>
+          </div>
+          <p class="timestamp">Update: {{ asset.currentPrice?.timestamp | date:'mediumTime' }}</p>
+        </div>
       </div>
     </div>
-    <div *ngIf="(prices$ | async)?.length === 0" class="no-data">
-      <p>Fetching market data...</p>
+
+    <div class="chart-section">
+      <highcharts-chart 
+        [options]="chartOptions"
+        [(update)]="chartUpdateFlag"
+        style="width: 100%; height: 400px; display: block;">
+      </highcharts-chart>
     </div>
   </div>
 
