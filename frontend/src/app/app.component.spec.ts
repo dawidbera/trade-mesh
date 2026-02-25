@@ -1,21 +1,26 @@
 import { TestBed } from '@angular/core/testing';
 import { AppComponent } from './app.component';
 import { KeycloakService } from 'keycloak-angular';
-import { Apollo } from 'apollo-angular'; // Import Apollo
+import { Apollo } from 'apollo-angular';
+import { provideHighcharts } from 'highcharts-angular';
+import { of } from 'rxjs';
 
 describe('AppComponent', () => {
   let keycloakServiceMock: any;
-  let apolloMock: any; // Declare mock variable for Apollo
+  let apolloMock: any;
 
   beforeEach(async () => {
     keycloakServiceMock = jasmine.createSpyObj('KeycloakService', ['init', 'isLoggedIn', 'loadUserProfile', 'getToken']);
-    apolloMock = jasmine.createSpyObj('Apollo', ['client']); // Create a spy object for Apollo
+    apolloMock = jasmine.createSpyObj('Apollo', ['watchQuery', 'subscribe']);
+    apolloMock.watchQuery.and.returnValue({ valueChanges: of({ data: { allAssets: [] } }) });
+    apolloMock.subscribe.and.returnValue(of({ data: {} }));
 
     await TestBed.configureTestingModule({
       imports: [AppComponent],
       providers: [
         { provide: KeycloakService, useValue: keycloakServiceMock },
-        { provide: Apollo, useValue: apolloMock } // Provide the mock Apollo service
+        { provide: Apollo, useValue: apolloMock },
+        provideHighcharts({ instance: () => import('highcharts') })
       ],
     }).compileComponents();
   });
