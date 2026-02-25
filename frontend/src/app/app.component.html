@@ -42,6 +42,14 @@
     </div>
 
     <div class="chart-section">
+      <div class="chart-header">
+        <h2>Live Chart: {{ selectedAssetId }}</h2>
+        <div class="asset-selector">
+          <button (click)="selectAsset('BTC')" [class.active]="selectedAssetId === 'BTC'">BTC</button>
+          <button (click)="selectAsset('ETH')" [class.active]="selectedAssetId === 'ETH'">ETH</button>
+          <button (click)="selectAsset('AAPL')" [class.active]="selectedAssetId === 'AAPL'">AAPL</button>
+        </div>
+      </div>
       <highcharts-chart 
         [options]="chartOptions"
         [(update)]="chartUpdateFlag"
