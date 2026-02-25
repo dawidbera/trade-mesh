@@ -21,6 +21,8 @@
     "apollo-angular": "^13.0.0",
     "graphql": "^16.12.0",
     "graphql-ws": "^6.0.7",
+    "highcharts": "^12.5.0",
+    "highcharts-angular": "^5.4.0",
     "keycloak-angular": "^21.0.0",
     "keycloak-js": "^26.2.3",
     "rxjs": "~7.8.0",

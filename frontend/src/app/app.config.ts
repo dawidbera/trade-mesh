@@ -11,6 +11,7 @@ import { getMainDefinition } from '@apollo/client/utilities';
 
 import { routes } from './app.routes';
 import { environment } from '../environments/environment';
+import { provideHighcharts } from 'highcharts-angular';
 
 function initializeKeycloak(keycloak: KeycloakService) {
   return () =>
@@ -32,6 +33,7 @@ export const appConfig: ApplicationConfig = {
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
     provideHttpClient(withFetch()),
+    provideHighcharts({ instance: () => import('highcharts') }),
     importProvidersFrom(KeycloakAngularModule),
     /* {
       provide: APP_INITIALIZER,
