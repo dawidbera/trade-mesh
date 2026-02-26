@@ -7,7 +7,7 @@ Real-time market price simulator for the TradeMesh platform.
 - **Live State:** Maintains current prices in **Redis**.
 - **Distribution:** Publishes price updates as JSON events to **RabbitMQ** (Fanout exchange `market-prices`).
 - **Internal API:** Provides gRPC `PriceService` for synchronous price retrieval.
-- **Security:** Production secrets (RabbitMQ, Redis) are managed via **HashiCorp Vault**.
+- **Security:** Production secrets (RabbitMQ, Redis) are managed via **HashiCorp Vault** or direct **Environment Variables** in Sandbox.
 
 ## 🛠️ Semantic Warm-up
 Implements a custom readiness check. The service reports `DOWN` until the **Redis** connection pool is fully initialized and a successful PING is executed.
@@ -15,7 +15,7 @@ Implements a custom readiness check. The service reports `DOWN` until the **Redi
 ## 📡 API & Messaging
 - **gRPC Port:** `9001`
 - **RabbitMQ Exchange:** `market-prices` (type: fanout)
-- **Health:** `GET /health`
+- **Health:** `GET /q/health`
 
 ## 💻 Development
 Run in dev mode:

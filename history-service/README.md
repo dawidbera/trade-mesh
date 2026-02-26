@@ -20,7 +20,7 @@ A custom liveness health check that monitors the **Agroal connection pool**. If 
 - **gRPC Port:** `9003`
 - **RabbitMQ Queue:** `history-archive-queue` (bound to `market-prices` exchange)
 - **Database:** PostgreSQL (optimized for TimescaleDB)
-- **Health:** `GET /health` (Readiness + Liveness)
+- **Health:** `GET /q/health` (Readiness + Liveness)
 
 ## 💻 Development
 Run in dev mode:

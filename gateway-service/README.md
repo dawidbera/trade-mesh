@@ -13,7 +13,8 @@ The GraphQL API Gateway and Backend-for-Frontend (BFF) for the TradeMesh platfor
 ## 📡 API Endpoints
 - **GraphQL:** `POST /graphql`
 - **GraphQL Subscription:** `WS /graphql`
-- **Health:** `GET /health` (includes Semantic Warm-up check)
+- **GraphQL UI:** `GET /q/graphql-ui` (Enabled in Prod)
+- **Health:** `GET /q/health` (includes Semantic Warm-up check)
 
 ## 🛠️ Semantic Warm-up
 This service implements a custom readiness check. It reports `DOWN` until it has successfully established connectivity with downstream gRPC services through a series of probe calls.
