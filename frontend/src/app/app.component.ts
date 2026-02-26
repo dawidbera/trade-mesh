@@ -21,7 +21,21 @@ export class AppComponent implements OnInit {
     title: { text: 'Real-time Market Data', style: { color: '#ffffff' } },
     xAxis: { type: 'datetime', labels: { style: { color: '#ffffff' } } },
     yAxis: { title: { text: 'Price', style: { color: '#ffffff' } }, labels: { style: { color: '#ffffff' } } },
-    series: [{ name: 'Market Price', data: [], color: '#00ff00', type: 'line', dataLabels: { enabled: true, style: { color: '#ffffff' } } }],
+    series: [{ 
+      name: 'Market Price', 
+      data: [], 
+      color: '#00ff00', 
+      type: 'line', 
+      dataLabels: { 
+        enabled: true, 
+        style: { 
+          color: '#ffffff', 
+          fontWeight: 'normal', 
+          fontSize: '11px',
+          textOutline: 'none' 
+        } 
+      } 
+    }],
     credits: { enabled: false }
   };
   chartUpdateFlag = false;
