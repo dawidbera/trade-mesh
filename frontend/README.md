@@ -54,6 +54,17 @@ ng e2e
 
 Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
 
+## Deployment to OpenShift
+
+To deploy the frontend to Red Hat OpenShift Sandbox, use the provided script in the project root:
+
+```bash
+cd ..
+./deploy_frontend.sh
+```
+
+This script will build the application locally and push the artifacts to OpenShift using a binary build with **Nginx**.
+
 ## Additional Resources
 
 For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.

@@ -1,7 +1,7 @@
 export const environment = {
-  production: false,
-  graphqlUrl: 'http://localhost:8084/graphql',
-  graphqlWsUrl: 'ws://localhost:8084/graphql',
+  production: true,
+  graphqlUrl: 'http://gateway-service-dawidbera-dev.apps.rm2.thpm.p1.openshiftapps.com/graphql',
+  graphqlWsUrl: 'ws://gateway-service-dawidbera-dev.apps.rm2.thpm.p1.openshiftapps.com/graphql',
   keycloak: {
     url: 'http://localhost:8180',
     realm: 'trademesh',
