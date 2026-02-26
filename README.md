@@ -18,33 +18,33 @@ The system follows the **Backend-for-Frontend (BFF)** pattern with a high-speed 
 ```mermaid
 graph TD
     subgraph "External World"
-        Client[Angular 21 Client + Real-time Charts]
+        Client["Angular 21 Client + Real-time Charts"]
     end
 
-    subgraph "Infrastructure (Helm)"
-        RabbitMQ{RabbitMQ / market.prices}
-        Redis[(Redis Cache)]
-        Timescale[(PostgreSQL / TimescaleDB)]
+    subgraph "Infrastructure Layer"
+        RabbitMQ{"RabbitMQ (market.prices)"}
+        Redis[("Redis Cache")]
+        Timescale[("PostgreSQL / TimescaleDB")]
     end
 
     subgraph "TradeMesh Gateway (BFF)"
-        Gateway[GraphQL Gateway + Subscriptions]
+        Gateway["GraphQL Gateway + Subscriptions"]
     end
 
     subgraph "gRPC Mesh (Internal - Sync)"
-        Market[Market Data Engine]
-        Analytics[Analytics Service]
-        History[History Service]
+        Market["Market Data Engine"]
+        Analytics["Analytics Service"]
+        History["History Service"]
     end
 
     subgraph "Configuration Management"
-        Env[Direct Environment Variables]
-        Vault[HashiCorp Vault - Optional/Bypassed]
+        Env["Direct Environment Variables"]
+        Vault["HashiCorp Vault (Optional)"]
     end
 
     %% Request Flows
     Client -- "1. GraphQL Query / WS Sub" --> Gateway
-    Gateway -- "2. Auth (Keycloak Bypassed in Sandbox)" .-> Vault
+    Gateway -. "2. Auth (Bypassed in Sandbox)" .-> Vault
     
     %% Internal gRPC calls (Sync)
     Gateway -- "3. gRPC (Parallel OHLC + Price)" --> Market
@@ -104,3 +104,34 @@ This script builds the Angular app locally and deploys it to OpenShift as a stat
 - **Frontend:** `http://frontend-[namespace].apps.rm2.thpm.p1.openshiftapps.com`
 - **GraphQL UI:** `http://gateway-service-[namespace].apps.rm2.thpm.p1.openshiftapps.com/q/graphql-ui`
 - **Health Checks:** `http://[service-name]-[namespace].apps.rm2.thpm.p1.openshiftapps.com/q/health`
+
+## 📸 Visual Walkthrough & Proof of Deployment
+
+### 1. Real-time Dashboard
+![Frontend Dashboard](docs/images/screenshot-angular-dashboard.gif)
+*Live Angular 21 dashboard showing real-time price feeds aggregated via GraphQL.*
+
+### 2. Cloud-Native Infrastructure (OpenShift Topology)
+![OpenShift Topology](docs/images/screenshot-openshift-topology-view.png)
+*Visual representation of the TradeMesh microservices and infrastructure in the Red Hat Sandbox.*
+
+### 3. Unified Data Mesh (GraphQL Explorer)
+![GraphQL Unified Data Mesh](docs/images/graphql-unified-data-mesh.png)
+*Example of the **GraphQL Gateway** aggregating real-time data from three separate gRPC microservices: Market Data (Price), Analytics (SMA), and History (OHLC).*
+
+### 4. Real-time Price Streaming (WebSockets)
+![GraphQL Real-time Subscriptions](docs/images/graphql-realtime-subscriptions.png)
+*Live price updates streamed via **GraphQL Subscriptions** over WebSockets from RabbitMQ.*
+
+### 5. Enterprise Reliability (Health Checks)
+![Market Data Health](docs/images/screenshot-market-data-service.png)
+![Gateway Health](docs/images/screenshot-gateway-service.png)
+*Demonstrating Semantic Warm-up and readiness indicators across services.*
+
+### 6. Command Line Status
+![OC Status](docs/images/screenshot-oc-get-pods-routes-quota.png)
+*Confirmation of all pods running successfully within the OpenShift Sandbox quotas.*
+
+### 7. TimescaleDB Hypertable Confirmation
+![TimescaleDB Hypertable](docs/images/screenshot-timescaledb-hypertable.png)
+*Confirms the 'transactions' table is a TimescaleDB hypertable, demonstrating optimized time-series data handling.*
